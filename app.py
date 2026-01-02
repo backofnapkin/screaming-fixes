@@ -22,9 +22,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Agent Mode configuration
-AGENT_MODE_API_KEY = os.environ.get("AGENT_MODE_API_KEY", "")  # Your key for free AI suggestions
-AGENT_MODE_FREE_SUGGESTIONS = 5  # Number of free AI suggestions in Agent Mode
+# Quick Start Mode configuration
+QUICK_START_API_KEY = os.environ.get("AGENT_MODE_API_KEY", "")  # Your key for free AI suggestions
+QUICK_START_FREE_SUGGESTIONS = 5  # Number of free AI suggestions in Quick Start Mode
+QUICK_START_PAGE_LIMIT = 25  # Max pages in Quick Start Mode
+
+# Legacy alias for backwards compatibility
+AGENT_MODE_API_KEY = QUICK_START_API_KEY
+AGENT_MODE_FREE_SUGGESTIONS = QUICK_START_FREE_SUGGESTIONS
+AGENT_MODE_LIMIT = QUICK_START_PAGE_LIMIT
 
 # Analytics configuration (silent tracking)
 LANGSMITH_ENABLED = os.environ.get("LANGCHAIN_TRACING_V2", "").lower() == "true"
@@ -479,9 +485,9 @@ def init_session_state():
         'wp_execute_results': None,
         'wp_preview_done': False,
         'wp_was_test_run': False,  # Track if last execution was a test run
-        'selected_mode': 'agent',  # 'agent' or 'enterprise'
-        'anthropic_key': '',  # User's own API key (for Enterprise Mode)
-        'ai_suggestions_remaining': AGENT_MODE_FREE_SUGGESTIONS,  # Free suggestions in Agent Mode
+        'selected_mode': 'quick_start',  # 'quick_start' or 'full'
+        'anthropic_key': '',  # User's own API key
+        'ai_suggestions_remaining': AGENT_MODE_FREE_SUGGESTIONS,  # Free suggestions in Quick Start Mode
         
         # Broken Links UI state
         'page': 0,
@@ -495,12 +501,16 @@ def init_session_state():
         'editing_url': None,  # Currently editing URL (for inline edit form)
         
         # Post ID tracking (shared)
-        'has_post_ids': False,  # CSV included post_id column
+        'has_post_ids': False,  # CSV included post_id column or Post ID file uploaded
+        'post_id_file_uploaded': False,  # Separate Post ID file was uploaded
+        'post_id_file_count': 0,  # Count from uploaded Post ID file
+        'post_id_matched_count': 0,  # How many report URLs matched with Post IDs
+        'post_id_unmatched_urls': [],  # URLs that didn't match (for display)
         'source_pages_count': 0,  # Total unique source pages
         'post_id_check_done': False,  # Sample check completed
         'post_id_check_passed': False,  # Sample check found Post IDs
         'post_id_cache': {},  # Cache of URL -> Post ID (found or manual)
-        'agent_mode_available': False,  # ≤25 pages and check passed, or has_post_ids
+        'full_mode_available': False,  # Post IDs available for unlimited fixes
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -577,8 +587,23 @@ def parse_csv(uploaded_file) -> Optional[pd.DataFrame]:
 
 
 def detect_csv_type(df: pd.DataFrame) -> str:
-    """Auto-detect if CSV is broken links or redirect chains based on columns"""
+    """
+    Auto-detect CSV type based on columns.
+    Returns: 'post_ids', 'redirect_chains', or 'broken_links'
+    """
     columns = set(df.columns.str.lower().str.strip())
+    
+    # Check for Post ID file first
+    # Post ID files have Address + post_id column, but NO Destination or Final Address
+    has_address = 'address' in columns
+    has_post_id = any(col.startswith('post_id') or col.startswith('postid') or col == 'post-id' 
+                      for col in columns)
+    has_destination = 'destination' in columns
+    has_final_address = 'final address' in columns
+    
+    # Post ID file: has Address and post_id, but NOT a report file
+    if has_address and has_post_id and not has_destination and not has_final_address:
+        return 'post_ids'
     
     # Redirect chains has these distinctive columns
     redirect_chain_indicators = {'final address', 'number of redirects', 'chain type', 'loop'}
@@ -586,7 +611,7 @@ def detect_csv_type(df: pd.DataFrame) -> str:
     # Broken links has these columns
     broken_link_indicators = {'destination', 'status code'}
     
-    # Check for redirect chains first (more specific)
+    # Check for redirect chains (more specific)
     if len(redirect_chain_indicators & columns) >= 2:
         return 'redirect_chains'
     
@@ -754,6 +779,105 @@ def group_redirect_chains(df: pd.DataFrame, domain: str) -> tuple:
         loops_consolidated[key]['count'] += 1
     
     return redirects, list(sitewide_consolidated.values()), list(loops_consolidated.values())
+
+
+def parse_post_id_csv(uploaded_file) -> Dict[str, int]:
+    """
+    Parse a Custom Extraction CSV containing Post IDs.
+    Returns a dict mapping URL/Address to Post ID.
+    
+    Handles Screaming Frog's column naming conventions:
+    - 'post_id 1', 'post_id 2' (numbered extractors)
+    - 'post_id', 'PostId', 'post-id' (various formats)
+    """
+    try:
+        df = pd.read_csv(uploaded_file)
+        df.columns = df.columns.str.strip()
+        
+        # Find the URL column (could be 'Address', 'URL', or similar)
+        url_col = None
+        for col in df.columns:
+            if col.lower() in ['address', 'url', 'source', 'page url', 'page']:
+                url_col = col
+                break
+        
+        if not url_col:
+            # Default to first column if no match
+            url_col = df.columns[0]
+        
+        # Find the Post ID column - handle various naming conventions
+        post_id_col = None
+        for col in df.columns:
+            col_lower = col.lower()
+            # Check for exact matches first
+            if col_lower in ['post_id', 'postid', 'post-id', 'id', 'page_id', 'pageid']:
+                post_id_col = col
+                break
+            # Check for Screaming Frog's numbered format: 'post_id 1', 'post_id 2', etc.
+            if col_lower.startswith('post_id') or col_lower.startswith('postid') or col_lower.startswith('post-id'):
+                post_id_col = col
+                break
+            # Also check for 'page_id 1' format
+            if col_lower.startswith('page_id') or col_lower.startswith('pageid'):
+                post_id_col = col
+                break
+        
+        if not post_id_col:
+            return {}
+        
+        # Build the mapping
+        post_id_map = {}
+        for _, row in df.iterrows():
+            url = row[url_col]
+            post_id = row[post_id_col]
+            
+            if pd.notna(url) and pd.notna(post_id):
+                try:
+                    # Handle potential float values from CSV
+                    post_id_map[str(url).strip()] = int(float(post_id))
+                except (ValueError, TypeError):
+                    continue
+        
+        return post_id_map
+    
+    except Exception as e:
+        st.error(f"Error parsing Post ID CSV: {e}")
+        return {}
+
+
+def match_post_ids_to_sources(source_urls: List[str]) -> tuple:
+    """
+    Match source URLs from a report to the Post ID cache.
+    Returns (matched_count, unmatched_urls)
+    """
+    matched = 0
+    unmatched = []
+    
+    for url in source_urls:
+        if url in st.session_state.post_id_cache:
+            matched += 1
+        else:
+            # Check if it's an archive/category page (expected to be unmatched)
+            url_lower = url.lower()
+            is_archive = any(x in url_lower for x in ['/category/', '/tag/', '/author/', '/page/', '/archive/'])
+            unmatched.append({
+                'url': url,
+                'is_archive': is_archive
+            })
+    
+    return matched, unmatched
+
+
+def get_unmatched_summary(unmatched_urls: List[Dict]) -> Dict:
+    """Summarize unmatched URLs by type"""
+    archive_count = sum(1 for u in unmatched_urls if u['is_archive'])
+    other_count = len(unmatched_urls) - archive_count
+    
+    return {
+        'total': len(unmatched_urls),
+        'archive': archive_count,
+        'other': other_count
+    }
 
 
 def group_by_broken_url(df: pd.DataFrame, domain: str) -> Dict[str, Dict]:
@@ -945,316 +1069,549 @@ def render_header():
 
 
 def render_upload_section():
-    """Render the CSV upload section - unified for both report types"""
-    st.markdown('<p class="section-header">Upload CSV</p>', unsafe_allow_html=True)
+    """Render the CSV upload section - always visible with file status cards"""
+    st.markdown('<p class="section-header">Get Started</p>', unsafe_allow_html=True)
     
-    # Export instructions
+    # Check current state
+    has_post_ids = st.session_state.post_id_file_uploaded or st.session_state.has_post_ids
+    post_id_count = len(st.session_state.post_id_cache)
+    has_broken_links = st.session_state.df is not None
+    has_redirect_chains = st.session_state.rc_df is not None
+    
+    # Step 1: Crawl instructions
     st.markdown("""
-    **Upload your Screaming Frog export to get started:**
+    **Step 1:** Open [Screaming Frog](https://www.screamingfrog.co.uk/seo-spider/) and run a standard crawl of your site.
+    
+    **Step 2:** Export one of the supported reports below:
     """)
     
-    with st.expander("📋 Supported Report Types", expanded=False):
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("""
-            **🔗 Broken Links**
-            - **Export:** Bulk Export → Response Codes → Client Error (4xx) → Inlinks
-            - **Fixes:** Remove broken links or replace with working URLs
-            """)
-        with col2:
-            st.markdown("""
-            **🔄 Redirect Chains**
-            - **Export:** Reports → Redirects → All Redirects
-            - **Fixes:** Update old URLs to their final destinations
-            """)
+    with st.expander("🔗 Broken Links", expanded=False):
+        st.markdown("""
+        **What it fixes:** Removes or replaces broken links (404s, 500s, etc.) across your site.
+        
+        **How to export:**
+        1. After your crawl completes, go to **Bulk Export → Response Codes → Client Error (4xx) → Inlinks**
+        2. Save the CSV file
+        3. Upload it here
+        """)
+    
+    with st.expander("🔄 Redirect Chains", expanded=False):
+        st.markdown("""
+        **What it fixes:** Updates old URLs that redirect through multiple hops to point directly to the final destination.
+        
+        **How to export:**
+        1. After your crawl completes, go to **Reports → Redirects → All Redirects**
+        2. Save the CSV file
+        3. Upload it here
+        """)
+    
+    with st.expander("🆔 Post IDs — Unlock Full Mode (3 min setup, still free!)", expanded=False):
+        st.markdown("""
+        **What it does:** Maps your URLs to WordPress Post IDs, unlocking unlimited page fixes.
+        
+        **Why you need it:** Without Post IDs, you're limited to 25 pages per session. With Post IDs, fix your entire site at once.
+        
+        **How to set up:**
+        1. In Screaming Frog, go to **Configuration → Custom → Extraction**
+        2. Add a new extractor named `post_id` with regex (see [full setup guide](https://github.com/backofnapkin/screaming-fixes/blob/main/POST_ID_SETUP.md))
+        3. Re-crawl your site
+        4. Go to **Bulk Export → Custom Extraction → post_id** to download the CSV
+        5. Upload that CSV here
+        
+        *Requires Screaming Frog license (~$259/year) for Custom Extraction.*
+        """)
+    
+    st.markdown("**Step 3:** Upload your CSV:")
     
     uploaded = st.file_uploader(
         "Upload your Screaming Frog CSV",
         type=['csv'],
         label_visibility='collapsed',
-        help="We'll auto-detect whether this is a Broken Links or Redirect Chains export"
+        key="main_uploader",
+        help="We'll auto-detect the file type: Broken Links, Redirect Chains, or Post IDs"
     )
     
-    st.markdown("""
-    <div class="privacy-notice">
-        🔒 <strong>Your data is safe</strong> — processed in your browser session only. Nothing is saved to any database. All data is cleared when you close the tab.
-    </div>
-    """, unsafe_allow_html=True)
+    # Show uploaded file status cards
+    if has_post_ids or has_broken_links or has_redirect_chains:
+        st.markdown("**Uploaded Files:**")
+        
+        # Post IDs card
+        if has_post_ids:
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid #6ee7b7; margin-bottom: 0.5rem;">
+                    <span style="font-weight: 600; color: #065f46;">🆔 Post IDs</span>
+                    <span style="color: #047857; margin-left: 0.5rem;">{post_id_count} URLs mapped — Full Mode enabled</span>
+                </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                if st.button("✕", key="clear_post_ids", help="Clear Post IDs"):
+                    st.session_state.post_id_cache = {}
+                    st.session_state.post_id_file_uploaded = False
+                    st.session_state.post_id_file_count = 0
+                    st.session_state.has_post_ids = False
+                    st.session_state.selected_mode = 'quick_start'
+                    st.rerun()
+        
+        # Broken Links card
+        if has_broken_links:
+            broken_count = len(st.session_state.broken_urls)
+            source_count = st.session_state.source_pages_count
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid #fcd34d; margin-bottom: 0.5rem;">
+                    <span style="font-weight: 600; color: #92400e;">🔗 Broken Links</span>
+                    <span style="color: #a16207; margin-left: 0.5rem;">{broken_count} unique broken URLs across {source_count} pages</span>
+                </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                if st.button("✕", key="clear_broken_links", help="Clear Broken Links"):
+                    st.session_state.df = None
+                    st.session_state.broken_urls = {}
+                    st.session_state.decisions = {}
+                    st.session_state.domain = None
+                    if st.session_state.current_task == 'broken_links':
+                        st.session_state.current_task = 'redirect_chains' if has_redirect_chains else None
+                        st.session_state.task_type = 'redirect_chains' if has_redirect_chains else None
+                    st.rerun()
+        
+        # Redirect Chains card
+        if has_redirect_chains:
+            redirect_count = len(st.session_state.rc_redirects)
+            rc_source_count = len(st.session_state.rc_df['Source'].unique()) if st.session_state.rc_df is not None else 0
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid #a5b4fc; margin-bottom: 0.5rem;">
+                    <span style="font-weight: 600; color: #3730a3;">🔄 Redirect Chains</span>
+                    <span style="color: #4338ca; margin-left: 0.5rem;">{redirect_count} unique redirects across {rc_source_count} pages</span>
+                </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                if st.button("✕", key="clear_redirect_chains", help="Clear Redirect Chains"):
+                    st.session_state.rc_df = None
+                    st.session_state.rc_redirects = {}
+                    st.session_state.rc_decisions = {}
+                    st.session_state.rc_domain = None
+                    st.session_state.rc_sitewide = []
+                    st.session_state.rc_loops = []
+                    if st.session_state.current_task == 'redirect_chains':
+                        st.session_state.current_task = 'broken_links' if has_broken_links else None
+                        st.session_state.task_type = 'broken_links' if has_broken_links else None
+                    st.rerun()
+        
+        st.markdown("")  # Spacing
     
-    st.markdown("""
-    <div style="font-size: 0.8rem; color: #64748b; padding: 0.75rem; background: #f8fafc; border-radius: 8px; margin-bottom: 1rem;">
-        <strong>Disclaimer:</strong> You are responsible for reviewing and approving all changes before they are applied to your site. 
-        Screaming Frog data may occasionally contain errors or false positives. Always verify fixes are appropriate for your specific situation.
-    </div>
-    """, unsafe_allow_html=True)
+    # Privacy and disclaimer (only show if no files uploaded yet)
+    if not has_post_ids and not has_broken_links and not has_redirect_chains:
+        st.markdown("""
+        <div class="privacy-notice" style="margin-top: 0.5rem;">
+            🔒 <strong>Your data is safe</strong> — processed in your browser session only. Nothing is saved to any database.
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="font-size: 0.8rem; color: #64748b; padding: 0.75rem; background: #f8fafc; border-radius: 8px; margin-top: 0.5rem;">
+            <strong>Disclaimer:</strong> You are responsible for reviewing and approving all changes before they are applied to your site. 
+            Screaming Frog data may occasionally contain errors or false positives. Always verify fixes are appropriate for your specific situation.
+        </div>
+        """, unsafe_allow_html=True)
     
+    # Process new upload
     if uploaded:
-        # First, detect the CSV type
+        # Only process if we don't already have this data loaded
+        # (prevents re-processing on every rerun while file is still in uploader)
+        already_processed = False
+        
+        # Check if this file was already processed by comparing basic stats
         df_preview = pd.read_csv(uploaded)
         uploaded.seek(0)  # Reset file pointer
         
         csv_type = detect_csv_type(df_preview)
         
-        if csv_type == 'redirect_chains':
-            # Process as redirect chains
-            df = parse_redirect_chains_csv(uploaded)
-            if df is not None and len(df) > 0:
-                domain = detect_domain(df['Source'].tolist())
-                redirects, sitewide, loops = group_redirect_chains(df, domain)
-                
-                # Initialize decisions for each redirect
-                decisions = {}
-                for key in redirects:
-                    decisions[key] = {
-                        'approved_action': '',  # 'replace' or ''
-                        'approved_fix': '',  # Will be the final_address
-                    }
-                
-                # Store in session state
-                st.session_state.rc_df = df
-                st.session_state.rc_domain = domain
-                st.session_state.rc_redirects = redirects
-                st.session_state.rc_decisions = decisions
-                st.session_state.rc_sitewide = sitewide
-                st.session_state.rc_loops = loops
-                st.session_state.task_type = 'redirect_chains'
-                st.session_state.current_task = 'redirect_chains'
-                
-                # Count unique source pages
-                source_pages_count = df['Source'].nunique()
-                st.session_state.source_pages_count = source_pages_count
-                
-                # Check if CSV has post_id column with valid data
-                has_post_ids = df['post_id'].notna().any()
-                st.session_state.has_post_ids = has_post_ids
-                
-                # Pre-populate post_id cache from CSV
-                if has_post_ids:
-                    for _, row in df.iterrows():
-                        if pd.notna(row.get('post_id')):
-                            st.session_state.post_id_cache[row['Source']] = int(row['post_id'])
-                
-                # Count stats
-                total_redirects = len(redirects)
-                temp_count = sum(1 for r in redirects.values() if r['is_temp_redirect'])
-                
-                # Track upload
-                track_event("csv_upload", {
-                    "type": "redirect_chains",
-                    "unique_redirects": total_redirects,
-                    "total_references": len(df),
-                    "source_pages": source_pages_count,
-                    "sitewide_count": len(sitewide),
-                    "loop_count": len(loops),
-                    "temp_redirect_count": temp_count
-                })
-                
-                st.success(f"✅ **Redirect Chains detected!** Found **{total_redirects} unique redirects** across {source_pages_count} pages on {domain}")
-                
-                if sitewide:
-                    st.info(f"ℹ️ {len(sitewide)} sitewide links detected (header/footer/sidebar) — shown separately")
-                if loops:
-                    st.warning(f"⚠️ {len(loops)} redirect loops detected — cannot auto-fix")
-                
-                st.rerun()
+        # Determine if we should process based on what's already loaded
+        if csv_type == 'post_ids':
+            # Only process if we don't have post IDs or the count is different
+            already_processed = has_post_ids
+        elif csv_type == 'redirect_chains':
+            already_processed = has_redirect_chains
+        else:  # broken_links
+            already_processed = has_broken_links
         
-        else:
-            # Process as broken links (existing logic)
-            df = parse_csv(uploaded)
-            if df is not None and len(df) > 0:
-                domain = detect_domain(df['Source'].tolist())
-                broken_urls = group_by_broken_url(df, domain)
-                
-                decisions = {}
-                for url in broken_urls:
-                    decisions[url] = {
-                        'manual_fix': '',
-                        'ai_suggestion': '',
-                        'ai_action': '',
-                        'ai_notes': '',
-                        'approved_fix': '',
-                        'approved_action': '',
-                    }
-                
-                st.session_state.df = df
-                st.session_state.domain = domain
-                st.session_state.broken_urls = broken_urls
-                st.session_state.decisions = decisions
-                st.session_state.task_type = 'broken_links'
-                st.session_state.current_task = 'broken_links'
-                
-                # Track CSV upload (no PII - just counts)
-                track_event("csv_upload", {
-                    "type": "broken_links",
-                    "unique_broken_urls": len(broken_urls),
-                    "total_references": len(df),
-                    "source_pages": df['Source'].nunique()
-                })
-                
-                # Count unique source pages
-                source_pages_count = df['Source'].nunique()
-                st.session_state.source_pages_count = source_pages_count
-                
-                # Check if CSV has post_id column with valid data
-                has_post_ids = df['post_id'].notna().any()
-                st.session_state.has_post_ids = has_post_ids
-                
-                # Pre-populate post_id cache from CSV
-                if has_post_ids:
-                    for _, row in df.iterrows():
-                        if pd.notna(row.get('post_id')):
-                            st.session_state.post_id_cache[row['Source']] = int(row['post_id'])
-                
-                st.success(f"✅ **Broken Links detected!** Found **{len(broken_urls)} unique broken URLs** across {source_pages_count} pages on {domain}")
+        if not already_processed:
+            success = False
+            if csv_type == 'post_ids':
+                success = process_post_id_upload(uploaded)
+            elif csv_type == 'redirect_chains':
+                success = process_redirect_chains_upload(uploaded)
+            else:
+                success = process_broken_links_upload(uploaded)
+            
+            if success:
                 st.rerun()
+
+
+def process_post_id_upload(uploaded_file) -> bool:
+    """Process an uploaded Post ID CSV (Custom Extraction from Screaming Frog). Returns True if processing succeeded."""
+    post_id_map = parse_post_id_csv(uploaded_file)
+    
+    if post_id_map:
+        # Store in session state
+        st.session_state.post_id_cache.update(post_id_map)
+        st.session_state.post_id_file_uploaded = True
+        st.session_state.post_id_file_count = len(post_id_map)
+        st.session_state.has_post_ids = True
+        st.session_state.selected_mode = 'full'
+        
+        # Track upload
+        track_event("csv_upload", {
+            "type": "post_ids",
+            "post_id_count": len(post_id_map)
+        })
+        
+        # Retroactive matching if report already loaded
+        if st.session_state.df is not None:
+            source_urls = st.session_state.df['Source'].unique().tolist()
+            matched, unmatched = match_post_ids_to_sources(source_urls)
+            st.session_state.post_id_matched_count = matched
+            st.session_state.post_id_unmatched_urls = unmatched
+            st.session_state.source_pages_count = len(source_urls)
+        
+        if st.session_state.rc_df is not None:
+            source_urls = st.session_state.rc_df['Source'].unique().tolist()
+            matched, unmatched = match_post_ids_to_sources(source_urls)
+            st.session_state.post_id_matched_count = matched
+            st.session_state.post_id_unmatched_urls = unmatched
+            st.session_state.source_pages_count = len(source_urls)
+        
+        return True
+    else:
+        st.error("Could not find Post IDs in this file. Make sure it has an 'Address' column and a 'post_id' (or 'post_id 1') column.")
+        return False
+
+
+def process_redirect_chains_upload(uploaded_file) -> bool:
+    """Process an uploaded redirect chains CSV. Returns True if processing succeeded."""
+    df = parse_redirect_chains_csv(uploaded_file)
+    if df is not None and len(df) > 0:
+        domain = detect_domain(df['Source'].tolist())
+        redirects, sitewide, loops = group_redirect_chains(df, domain)
+        
+        # Initialize decisions for each redirect
+        decisions = {}
+        for key in redirects:
+            decisions[key] = {
+                'approved_action': '',
+                'approved_fix': '',
+            }
+        
+        # Store in session state
+        st.session_state.rc_df = df
+        st.session_state.rc_domain = domain
+        st.session_state.rc_redirects = redirects
+        st.session_state.rc_decisions = decisions
+        st.session_state.rc_sitewide = sitewide
+        st.session_state.rc_loops = loops
+        st.session_state.task_type = 'redirect_chains'
+        st.session_state.current_task = 'redirect_chains'
+        
+        # Count unique source pages
+        source_urls = df['Source'].unique().tolist()
+        source_pages_count = len(source_urls)
+        st.session_state.source_pages_count = source_pages_count
+        
+        # Check if CSV itself has post_id column
+        csv_has_post_ids = df['post_id'].notna().any()
+        if csv_has_post_ids:
+            for _, row in df.iterrows():
+                if pd.notna(row.get('post_id')):
+                    st.session_state.post_id_cache[row['Source']] = int(row['post_id'])
+            st.session_state.has_post_ids = True
+        
+        # Match Post IDs if we have them from separate file
+        if st.session_state.post_id_file_uploaded:
+            matched, unmatched = match_post_ids_to_sources(source_urls)
+            st.session_state.post_id_matched_count = matched
+            st.session_state.post_id_unmatched_urls = unmatched
+        
+        # Update mode based on Post ID availability
+        st.session_state.selected_mode = 'full' if st.session_state.has_post_ids else 'quick_start'
+        
+        # Track upload
+        total_redirects = len(redirects)
+        temp_count = sum(1 for r in redirects.values() if r['is_temp_redirect'])
+        track_event("csv_upload", {
+            "type": "redirect_chains",
+            "unique_redirects": total_redirects,
+            "total_references": len(df),
+            "source_pages": source_pages_count,
+            "sitewide_count": len(sitewide),
+            "loop_count": len(loops),
+            "temp_redirect_count": temp_count,
+            "has_post_ids": st.session_state.has_post_ids
+        })
+        
+        return True
+    return False
+
+
+def process_broken_links_upload(uploaded_file) -> bool:
+    """Process an uploaded broken links CSV. Returns True if processing succeeded."""
+    df = parse_csv(uploaded_file)
+    if df is not None and len(df) > 0:
+        domain = detect_domain(df['Source'].tolist())
+        broken_urls = group_by_broken_url(df, domain)
+        
+        decisions = {}
+        for url in broken_urls:
+            decisions[url] = {
+                'manual_fix': '',
+                'ai_suggestion': '',
+                'ai_action': '',
+                'ai_notes': '',
+                'approved_fix': '',
+                'approved_action': '',
+            }
+        
+        st.session_state.df = df
+        st.session_state.domain = domain
+        st.session_state.broken_urls = broken_urls
+        st.session_state.decisions = decisions
+        st.session_state.task_type = 'broken_links'
+        st.session_state.current_task = 'broken_links'
+        
+        # Count unique source pages
+        source_urls = df['Source'].unique().tolist()
+        source_pages_count = len(source_urls)
+        st.session_state.source_pages_count = source_pages_count
+        
+        # Check if CSV itself has post_id column
+        csv_has_post_ids = df['post_id'].notna().any()
+        if csv_has_post_ids:
+            for _, row in df.iterrows():
+                if pd.notna(row.get('post_id')):
+                    st.session_state.post_id_cache[row['Source']] = int(row['post_id'])
+            st.session_state.has_post_ids = True
+        
+        # Match Post IDs if we have them from separate file
+        if st.session_state.post_id_file_uploaded:
+            matched, unmatched = match_post_ids_to_sources(source_urls)
+            st.session_state.post_id_matched_count = matched
+            st.session_state.post_id_unmatched_urls = unmatched
+        
+        # Update mode based on Post ID availability
+        st.session_state.selected_mode = 'full' if st.session_state.has_post_ids else 'quick_start'
+        
+        # Track CSV upload
+        track_event("csv_upload", {
+            "type": "broken_links",
+            "unique_broken_urls": len(broken_urls),
+            "total_references": len(df),
+            "source_pages": source_pages_count,
+            "has_post_ids": st.session_state.has_post_ids
+        })
+        
+        return True
+    return False
+
+
+def render_post_id_match_status(total_pages: int):
+    """Render the Post ID matching status after report upload"""
+    matched = st.session_state.post_id_matched_count
+    unmatched = st.session_state.post_id_unmatched_urls
+    unmatched_summary = get_unmatched_summary(unmatched)
+    
+    if total_pages > 0:
+        match_pct = (matched / total_pages) * 100
+    else:
+        match_pct = 0
+    
+    st.markdown(f"""
+    <div style="background: #f0fdf4; padding: 1rem; border-radius: 8px; border: 1px solid #bbf7d0; margin: 0.5rem 0;">
+        <div style="font-weight: 600; color: #166534; margin-bottom: 0.5rem;">
+            ✅ {matched} of {total_pages} URLs matched with Post IDs ({match_pct:.0f}%)
+        </div>
+    """, unsafe_allow_html=True)
+    
+    if unmatched_summary['total'] > 0:
+        st.markdown(f"""
+        <div style="font-size: 0.9rem; color: #15803d;">
+            ℹ️ {unmatched_summary['total']} URLs unmatched — this is expected:
+            <ul style="margin: 0.25rem 0 0 1.5rem; padding: 0;">
+                <li>Category, tag, author, and archive pages don't have Post IDs</li>
+                <li>These are dynamically generated by WordPress</li>
+                <li>Fix the individual posts and these pages update automatically</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_post_id_extraction_guide():
     """Render detailed Screaming Frog Post ID extraction instructions"""
     st.markdown("""
-    **One-time setup in Screaming Frog (do this once, use forever):**
+    ### Why Post IDs Matter
     
-    Most WordPress sites include a "shortlink" in the HTML that contains the Post ID. 
-    We'll configure Screaming Frog to extract it automatically during every crawl.
+    When you see a URL like `/how-to-start-a-food-truck/`, that's the human-friendly version. 
+    But WordPress uses **numeric Post IDs** internally (like `6125`). To edit content via the API, 
+    we need this number.
     
-    ---
+    **Good news:** Your site already contains Post IDs in the HTML. We just need Screaming Frog to extract them.
     
-    **Step 1: Open Custom Extraction**
-    - In Screaming Frog, go to **Configuration → Custom → Extraction**
-    
-    **Step 2: Add a new extractor**
-    - Click **Add**
-    - Set the name to: `post_id`
-    - Change the dropdown from "XPath" to **Regex**
-    
-    **Step 3: Enter the regex pattern**
-    ```
-    <link[^>]+rel=['"]shortlink['"][^>]+href=['"][^'"]*\\?p=(\\d+)
-    ```
-    
-    **Step 4: Configure extraction settings**
-    - Make sure "Extract HTML" is selected (not "Extract Text")
-    - Click **OK** to save
-    
-    **Step 5: Save as default (optional but recommended)**
-    - Go to **File → Configuration → Save As Default**
-    - Now every future crawl will include Post IDs automatically!
+    **⚠️ Requires a licensed version of Screaming Frog** (~$259/year) for Custom Extraction. 
+    [Get it here](https://www.screamingfrog.co.uk/seo-spider/) — incredible value for professional SEO.
     
     ---
     
-    **Step 6: Run your crawl and export**
-    - Start a new crawl (or re-crawl your site)
-    - After completion, you'll see a **Custom Extraction** tab with Post IDs
-    - Export via **Bulk Export → Response Codes → Client Error (4xx) → Inlinks**
-    - The `post_id` column will be included automatically
+    ### Quick Setup (5 minutes, one-time)
+    
+    **Step 1:** In Screaming Frog, go to **Configuration → Custom → Extraction**
+    
+    **Step 2:** Click **Add** and configure:
+    - **Name:** `post_id`
+    - **Type:** Change to **Regex**
+    
+    **Step 3:** Add the Regex pattern (see options below)
+    
+    **Step 4:** Save as default: **Configuration → Profiles → Save Current Configuration as Default**
     
     ---
     
-    **Troubleshooting:**
-    - **No Post IDs found?** Your theme may not include shortlinks. Try this alternative regex for body class:
-      ```
-      class=['"][^'"]*(?:postid|page-id)-(\\d+)
-      ```
-    - **Still not working?** Use Agent Mode for up to 25 pages, or manually add a `post_id` column to your CSV.
+    ### Which Regex Pattern Do I Use?
+    
+    Check your site's HTML source (View Page Source) and look for one of these patterns:
+    """)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        **Option A: Shortlink** *(most common)*
+        
+        Look for: `<link rel="shortlink" href="...?p=6125">`
+        
+        ```
+        <link[^>]+rel=['"]shortlink['"][^>]+href=['"][^'"]*\\?p=(\\d+)
+        ```
+        
+        **Option B: Body Class**
+        
+        Look for: `<body class="...postid-6125...">`
+        
+        ```
+        class=['"][^'"]*(?:postid|page-id)-(\\d+)
+        ```
+        """)
+    
+    with col2:
+        st.markdown("""
+        **Option C: Article ID**
+        
+        Look for: `<article id="post-6125">`
+        
+        ```
+        <article[^>]+id=['"]post-(\\d+)
+        ```
+        
+        **Option D: REST API Link**
+        
+        Look for: `wp-json/wp/v2/posts/6125`
+        
+        ```
+        wp-json/wp/v2/posts/(\\d+)
+        ```
+        """)
+    
+    st.markdown("---")
+    
+    with st.expander("🤖 Can't find your pattern? Use this AI prompt"):
+        st.markdown("""
+        Copy this prompt and paste it into ChatGPT, Claude, or any AI assistant along with 
+        50-100 lines of your page's HTML source:
+        """)
+        
+        st.code("""I need to extract WordPress Post IDs from my website's HTML using Screaming Frog's Custom Extraction feature with Regex.
+
+Here is a sample of my page's HTML source code:
+
+[PASTE YOUR HTML HERE]
+
+Please analyze this HTML and:
+1. Identify where the WordPress Post ID is stored
+2. Provide the exact Regex pattern for Screaming Frog""", language=None)
+    
+    st.markdown("""
+    ---
+    
+    📖 **[View Full Setup Guide](https://github.com/backofnapkin/screaming-fixes/blob/main/POST_ID_SETUP.md)** — includes troubleshooting, screenshots, and video walkthrough.
     """)
 
 
 def render_mode_selector():
-    """Render mode selector after CSV upload"""
-    if st.session_state.df is None:
-        return
+    """Render mode selector after CSV upload - simplified since mode is auto-selected based on Post IDs"""
+    # Mode is now auto-selected based on Post ID availability
+    # This function now just shows status and allows manual override if needed
     
     source_pages = st.session_state.source_pages_count
     has_post_ids = st.session_state.has_post_ids
     post_id_count = len(st.session_state.post_id_cache)
+    current_mode = st.session_state.selected_mode
     
-    st.markdown("### Select Mode")
-    st.caption("Both options are **100% free** — choose what fits your workflow.")
+    st.markdown('<p class="section-header">Mode</p>', unsafe_allow_html=True)
     
-    # Mode selector cards
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        agent_selected = st.session_state.selected_mode == 'agent'
-        agent_border = "2px solid #0d9488" if agent_selected else "1px solid #e2e8f0"
-        agent_bg = "linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%)" if agent_selected else "white"
-        
-        # Agent mode limits
-        if source_pages <= AGENT_MODE_LIMIT:
-            agent_status = f"✅ {source_pages} pages — ready to go!"
-            agent_status_color = "#059669"
-        else:
-            agent_status = f"⚠️ {source_pages} pages — will fix first 25 to test (free!)"
-            agent_status_color = "#d97706"
-        
+    if has_post_ids:
+        # Full Mode active
         st.markdown(f"""
-        <div style="background: {agent_bg}; padding: 1.25rem; border-radius: 10px; border: {agent_border}; cursor: pointer; min-height: 150px; display: flex; flex-direction: column;">
-            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
-                <span style="font-size: 1.25rem;">🤖</span>
-                <span style="font-weight: 600; color: #134e4a; font-size: 1.1rem;">Agent Mode</span>
-                <span style="background: #14b8a6; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">DEFAULT</span>
-            </div>
-            <div style="font-size: 0.9rem; color: #334155; margin-bottom: 0.75rem; flex-grow: 1;">
-                Start fixing immediately. We auto-discover Post IDs by visiting each page. <strong>Perfect for testing. 100% free.</strong>
-            </div>
-            <div style="font-size: 0.85rem; color: {agent_status_color}; font-weight: 500; min-height: 1.5rem;">{agent_status}</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if st.button("Select Agent Mode", key="select_agent", use_container_width=True, 
-                     type="primary" if agent_selected else "secondary"):
-            st.session_state.selected_mode = 'agent'
-            st.rerun()
-    
-    with col2:
-        enterprise_selected = st.session_state.selected_mode == 'enterprise'
-        enterprise_border = "2px solid #0d9488" if enterprise_selected else "1px solid #e2e8f0"
-        enterprise_bg = "linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%)" if enterprise_selected else "white"
-        
-        # Enterprise mode status
-        if has_post_ids:
-            enterprise_status = f"✅ {post_id_count} Post IDs detected — ready!"
-            enterprise_status_color = "#059669"
-            enterprise_available = True
-        else:
-            enterprise_status = "⚙️ Requires Post IDs in CSV (2 min setup)"
-            enterprise_status_color = "#64748b"
-            enterprise_available = False
-        
-        st.markdown(f"""
-        <div style="background: {enterprise_bg}; padding: 1.25rem; border-radius: 10px; border: {enterprise_border}; cursor: pointer; min-height: 150px; display: flex; flex-direction: column;">
-            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+        <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); padding: 1rem; border-radius: 10px; border: 1px solid #6ee7b7;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
                 <span style="font-size: 1.25rem;">🚀</span>
-                <span style="font-weight: 600; color: #134e4a; font-size: 1.1rem;">Enterprise Mode</span>
+                <span style="font-weight: 600; color: #065f46; font-size: 1.1rem;">Full Mode Active</span>
             </div>
-            <div style="font-size: 0.9rem; color: #334155; margin-bottom: 0.75rem; flex-grow: 1;">
-                Unlimited pages, fastest execution. <strong>Best for large sites. 100% free.</strong>
+            <div style="font-size: 0.9rem; color: #047857; margin-top: 0.5rem;">
+                {post_id_count} Post IDs loaded — fix unlimited pages across your site
             </div>
-            <div style="font-size: 0.85rem; color: {enterprise_status_color}; font-weight: 500; min-height: 1.5rem;">{enterprise_status}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        # Quick Start Mode active
+        if source_pages <= AGENT_MODE_LIMIT:
+            status_msg = f"✅ {source_pages} pages — ready to fix all of them!"
+            status_color = "#059669"
+        else:
+            status_msg = f"⚠️ {source_pages} pages — will fix first 25 to test"
+            status_color = "#d97706"
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); padding: 1rem; border-radius: 10px; border: 1px solid #7dd3fc;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-size: 1.25rem;">⚡</span>
+                <span style="font-weight: 600; color: #0c4a6e; font-size: 1.1rem;">Quick Start Mode</span>
+            </div>
+            <div style="font-size: 0.9rem; color: #0369a1; margin-top: 0.5rem;">
+                {status_msg}
+            </div>
         </div>
         """, unsafe_allow_html=True)
         
-        if st.button("Select Enterprise Mode", key="select_enterprise", use_container_width=True,
-                     type="primary" if enterprise_selected else "secondary"):
-            st.session_state.selected_mode = 'enterprise'
-            st.rerun()
-    
-    # Show setup instructions if Enterprise selected but no Post IDs
-    if st.session_state.selected_mode == 'enterprise' and not has_post_ids:
-        st.markdown("---")
-        st.markdown("""
-        <div style="background: #fef3c7; padding: 1.25rem; border-radius: 10px; border: 1px solid #fcd34d;">
-            <div style="font-weight: 600; color: #92400e; margin-bottom: 0.75rem;">⚠️ Enterprise Mode requires Post IDs in your CSV</div>
-            <div style="color: #a16207; font-size: 0.95rem; line-height: 1.6;">
-                <strong>Why?</strong> WordPress requires Post IDs to identify which content to update — it's how WP understands your unique URLs. 
-                But by default, Screaming Frog doesn't include Post IDs in the crawl.<br><br>
-                <strong>Solution:</strong> Set up a custom extraction in Screaming Frog to capture Post IDs, then re-crawl and re-upload your CSV. 
-                This entire process only takes a few minutes to set up, and you only need to do it once.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        with st.expander("📋 How to set up Enterprise Mode (2 min)", expanded=True):
-            render_post_id_extraction_guide()
+        # Offer upgrade to Full Mode
+        if source_pages > AGENT_MODE_LIMIT:
+            with st.expander("🚀 Want to fix all pages? Upload Post IDs to unlock Full Mode (Still FREE!)"):
+                st.markdown("""
+                After you test out this tool in Quick Start Mode, **Full Mode** lets you fix unlimited pages by uploading a CSV file with Post IDs.
+                
+                [Learn how to set up Post ID extraction](https://github.com/backofnapkin/screaming-fixes/blob/main/POST_ID_SETUP.md) in Screaming Frog. This is a **one-time setup that takes 5 minutes**. From there you'll unlock all sorts of technical SEO fixes that you can implement with the same tool.
+                
+                **Why do we need Post IDs?**
+                
+                WordPress stores every page and post with a unique numeric ID (like `6125`), but your URLs only show the human-friendly slug (like `/how-to-start-a-food-truck/`). To edit content through the WordPress API, we need these Post IDs. Screaming Frog can extract them during a crawl, giving us the map we need to update your entire site automatically.
+                
+                ---
+                
+                **Ready to upgrade?** Upload your Post IDs CSV in the upload section above — your current report data will be preserved and automatically matched.
+                """)
 
 
 def render_metrics():
@@ -1610,7 +1967,7 @@ def render_url_row(url: str, info: Dict, decision: Dict, domain: str, is_first_r
         
         elif selected_fix == "🤖 Use AI":
             # Get mode and remaining suggestions
-            selected_mode = st.session_state.get('selected_mode', 'agent')
+            selected_mode = st.session_state.get('selected_mode', 'quick_start')
             remaining = st.session_state.ai_suggestions_remaining
             user_has_key = bool(st.session_state.anthropic_key)
             
@@ -1619,8 +1976,8 @@ def render_url_row(url: str, info: Dict, decision: Dict, domain: str, is_first_r
             AI searches the web to find a suitable replacement URL or recommends removal if no replacement exists.
             """)
             
-            # Show free suggestions counter for Agent Mode
-            if selected_mode == 'agent' and AGENT_MODE_API_KEY:
+            # Show free suggestions counter for Quick Start Mode
+            if selected_mode == 'quick_start' and AGENT_MODE_API_KEY:
                 if remaining > 0:
                     st.markdown(f"🎁 **{remaining} of {AGENT_MODE_FREE_SUGGESTIONS} free AI suggestions available**")
                 elif not user_has_key:
@@ -1652,8 +2009,8 @@ def render_url_row(url: str, info: Dict, decision: Dict, domain: str, is_first_r
                 # No AI suggestion yet - show button based on mode
                 st.markdown("---")
                 
-                if selected_mode == 'agent':
-                    # Agent Mode - use free suggestions or user's key
+                if selected_mode == 'quick_start':
+                    # Quick Start Mode - use free suggestions or user's key
                     if remaining > 0 and AGENT_MODE_API_KEY:
                         # Free suggestions available
                         if st.button("🔍 Get AI Suggestion", key=f"ai_{url}", use_container_width=True):
@@ -1699,7 +2056,7 @@ def render_url_row(url: str, info: Dict, decision: Dict, domain: str, is_first_r
                         st.caption("Get your key at [console.anthropic.com](https://console.anthropic.com) • Keys are stored in your browser session only")
                 
                 else:
-                    # Enterprise Mode - require user's key
+                    # Full Mode - require user's key
                     if user_has_key:
                         if st.button("🔍 Get AI Suggestion", key=f"ai_{url}", use_container_width=True):
                             with st.spinner("AI is searching for alternatives..."):
@@ -1709,7 +2066,7 @@ def render_url_row(url: str, info: Dict, decision: Dict, domain: str, is_first_r
                                 st.session_state.decisions[url]['ai_notes'] = result['notes']
                                 st.rerun()
                     else:
-                        st.info("🔑 **Enterprise Mode:** Enter your Claude API key for AI suggestions")
+                        st.info("🔑 **Full Mode:** Enter your Claude API key for AI suggestions")
                         
                         api_key_input = st.text_input(
                             "Your Claude API Key:",
@@ -1761,14 +2118,6 @@ def render_wordpress_section():
     """Render WordPress connection section"""
     st.markdown('<p class="section-header">WordPress Connection</p>', unsafe_allow_html=True)
     
-    st.markdown("**Required to publish updates directly to your site.**")
-    
-    st.markdown("""
-    <div class="privacy-notice">
-        🔒 <strong>Your credentials are safe</strong> — stored in your browser session only. Nothing is saved to any database. All data is cleared when you close the tab.
-    </div>
-    """, unsafe_allow_html=True)
-    
     if st.session_state.wp_connected:
         col1, col2 = st.columns([3, 1])
         with col1:
@@ -1781,10 +2130,12 @@ def render_wordpress_section():
                 st.session_state.wp_client = None
                 st.rerun()
     else:
-        st.markdown("Connect to apply fixes directly to your WordPress site via the REST API.")
+        st.markdown("""
+        Required to publish updates directly to your site. This connection will allow the tool to apply fixes directly to your WordPress site via the REST API. This step takes less than 3 minutes to setup in WordPress.
+        """)
         
         # Setup instructions dropdown
-        with st.expander("📋 **How to get your Application Password** (required)", expanded=False):
+        with st.expander("📋 **How to Get Your Application Password** (required)", expanded=False):
             st.markdown("""
             WordPress Application Passwords let external tools like Screaming Fixes access your site securely. 
             **You'll need a WordPress account with Administrator privileges.**
@@ -1828,10 +2179,10 @@ def render_wordpress_section():
             )
         
         app_password = st.text_input(
-            "Application Password",
+            "Application Password ⚠️ This is NOT your WordPress login password — see instructions above",
             type="password",
             placeholder="xxxx xxxx xxxx xxxx xxxx xxxx",
-            help="The Application Password you generated (not your regular login password)"
+            help="Generate this in WordPress under Users → Profile → Application Passwords. This is a separate password specifically for API access."
         )
         
         if st.button("🔌 Connect to WordPress", type="primary"):
@@ -1854,6 +2205,12 @@ def render_wordpress_section():
                             st.error(result["message"])
                     except Exception as e:
                         st.error(f"Connection failed: {str(e)}")
+        
+        st.markdown("""
+        <div class="privacy-notice" style="margin-top: 1rem;">
+            🔒 <strong>Your credentials are safe</strong> — stored in your browser session only. Nothing is saved to any database. All data is cleared when you close the tab.
+        </div>
+        """, unsafe_allow_html=True)
 
 
 def render_export_section():
@@ -1941,7 +2298,7 @@ def render_export_section():
     
     pages_to_fix = len(source_pages_to_fix)
     has_post_ids = st.session_state.has_post_ids
-    selected_mode = st.session_state.get('selected_mode', 'agent')
+    selected_mode = st.session_state.get('selected_mode', 'quick_start')
     
     # Check if we have post_ids for all pages
     if has_post_ids:
@@ -1952,25 +2309,25 @@ def render_export_section():
         pages_with_ids = 0
     
     # Handle based on selected mode
-    if selected_mode == 'enterprise':
-        # Enterprise Mode selected
+    if selected_mode == 'full':
+        # Full Mode selected
         if all_have_ids:
-            st.success(f"🚀 **Enterprise Mode:** All {pages_to_fix} pages have Post IDs — ready for maximum speed!")
+            st.success(f"🚀 **Full Mode:** All {pages_to_fix} pages have Post IDs — ready for maximum speed!")
             render_wordpress_execute_ui(approved, source_pages_to_fix)
         else:
-            st.error("🚀 **Enterprise Mode:** Post IDs required but not found in your CSV.")
-            st.markdown("**To use Enterprise Mode:**")
+            st.error("🚀 **Full Mode:** Post IDs required but not found in your CSV.")
+            st.markdown("**To use Full Mode:**")
             st.markdown("1. Set up Screaming Frog to extract Post IDs (see instructions above)")
             st.markdown("2. Re-crawl your site")
             st.markdown("3. Re-upload your CSV")
             st.markdown("")
-            st.info("💡 **Or switch to Agent Mode** to fix up to 25 pages right now!")
+            st.info("💡 **Or switch to Quick Start Mode** to fix up to 25 pages right now!")
     
     else:
-        # Agent Mode selected
+        # Quick Start Mode selected
         if pages_to_fix <= AGENT_MODE_LIMIT:
             # Within limit - can fix all
-            st.info(f"🤖 **Agent Mode:** {pages_to_fix} pages to update")
+            st.info(f"🤖 **Quick Start Mode:** {pages_to_fix} pages to update")
             
             # Sample check if not done
             if not st.session_state.post_id_check_done:
@@ -1983,7 +2340,7 @@ def render_export_section():
                     render_wordpress_execute_ui(approved, source_pages_to_fix)
                 else:
                     st.error("❌ Could not find Post IDs automatically on your site.")
-                    st.info("💡 Try setting up Enterprise Mode for more reliable Post ID handling.")
+                    st.info("💡 Try setting up Full Mode for more reliable Post ID handling.")
         
         else:
             # Over limit - offer test run
@@ -1991,9 +2348,9 @@ def render_export_section():
             
             st.markdown(f"""
             <div style="background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); padding: 1.25rem; border-radius: 10px; margin-bottom: 1rem; border: 1px solid #7dd3fc;">
-                <div style="font-weight: 600; color: #0c4a6e; margin-bottom: 0.5rem;">🤖 Agent Mode: Test Run</div>
+                <div style="font-weight: 600; color: #0c4a6e; margin-bottom: 0.5rem;">🤖 Quick Start Mode: Test Run</div>
                 <div style="color: #0369a1; font-size: 0.95rem;">
-                    You have {pages_to_fix} pages, but Agent Mode handles {AGENT_MODE_LIMIT} at a time.<br>
+                    You have {pages_to_fix} pages, but Quick Start Mode handles {AGENT_MODE_LIMIT} at a time.<br>
                     <strong>Let's fix the first {AGENT_MODE_LIMIT} pages</strong> so you can see the tool in action!
                 </div>
             </div>
@@ -2021,7 +2378,7 @@ def render_export_section():
                     render_wordpress_execute_ui(test_run_approved, set(test_run_pages), is_test_run=True)
                 else:
                     st.error("❌ Automatic Post ID lookup failed.")
-                    st.info("💡 Try setting up Enterprise Mode for more reliable Post ID handling.")
+                    st.info("💡 Try setting up Full Mode for more reliable Post ID handling.")
 
 
 def run_post_id_sample_check(sample_urls: List[str]):
@@ -2079,9 +2436,8 @@ def render_large_dataset_instructions():
         
         **Run your crawl:**
         1. Start a new crawl of your site
-        2. After completion, the Post ID will appear in the **Custom Extraction** tab
-        3. Export your data — the `post_id` column will be included
-        4. Upload the new CSV here
+        2. After completion, go to **Bulk Export → Custom Extraction → post_id**
+        3. Save this CSV file and upload it here
         
         *Most WordPress sites include a shortlink meta tag with the Post ID.*
         """)
@@ -2951,10 +3307,10 @@ def render_rc_export_section():
             source_pages_to_fix.add(source)
     
     pages_to_fix = len(source_pages_to_fix)
-    selected_mode = st.session_state.get('selected_mode', 'agent')
+    selected_mode = st.session_state.get('selected_mode', 'quick_start')
     
-    if selected_mode == 'agent' and pages_to_fix <= AGENT_MODE_LIMIT:
-        st.info(f"🤖 **Agent Mode:** {pages_to_fix} pages to update")
+    if selected_mode == 'quick_start' and pages_to_fix <= AGENT_MODE_LIMIT:
+        st.info(f"🤖 **Quick Start Mode:** {pages_to_fix} pages to update")
         
         if not st.session_state.post_id_check_done:
             st.markdown("Before applying, let's verify your site supports automatic Post ID discovery.")
@@ -2967,9 +3323,9 @@ def render_rc_export_section():
                     run_rc_agent_fixes(approved, source_pages_to_fix)
             else:
                 st.error("❌ Automatic Post ID lookup failed.")
-                st.info("💡 Try setting up Enterprise Mode for more reliable Post ID handling.")
+                st.info("💡 Try setting up Full Mode for more reliable Post ID handling.")
     else:
-        st.warning(f"⚠️ {pages_to_fix} pages exceeds Agent Mode limit ({AGENT_MODE_LIMIT}). Use Enterprise Mode or export CSV for manual updates.")
+        st.warning(f"⚠️ {pages_to_fix} pages exceeds Quick Start Mode limit ({AGENT_MODE_LIMIT}). Use Full Mode or export CSV for manual updates.")
 
 
 def run_rc_agent_fixes(approved: List, source_pages_to_fix: set):
@@ -3127,7 +3483,7 @@ def render_about():
     
     **What this tool does:**
     - **Broken Links:** Groups thousands of link references by unique broken URL, with optional AI suggestions
-    - **Redirect Chains:** Bulk updates outdated URLs to their final destinations (no AI needed!)
+    - **Redirect Chains:** Bulk updates outdated URLs to their final destinations
     - Requires **human approval** for all fixes before they're applied
     - **Fixes and publishes updates** directly to your live WordPress website
     - Exports to CSV/JSON for use with WordPress or any CMS
@@ -3327,18 +3683,22 @@ def main():
     render_header()
     render_progress_indicator()
     
-    # Check if we have any data loaded
+    # Always show upload section at the top
+    render_upload_section()
+    
+    # Check state AFTER upload section (in case new file was just processed)
     has_broken_links = st.session_state.df is not None
     has_redirect_chains = st.session_state.rc_df is not None
+    has_post_ids = st.session_state.has_post_ids
     
-    if not has_broken_links and not has_redirect_chains:
-        # No data loaded yet - show upload section
-        render_upload_section()
-    else:
-        # Data loaded - show task switcher if multiple tasks
+    # If data is loaded, show the workflow below
+    if has_broken_links or has_redirect_chains:
+        st.markdown("---")
+        
+        # Show task switcher if multiple tasks
         render_task_switcher()
         
-        # Mode status banner - shows Agent Mode / Enterprise Mode status
+        # Mode status banner - shows Quick Start Mode / Full Mode status
         render_mode_selector()
         
         # Render based on current task type

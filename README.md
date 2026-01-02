@@ -50,19 +50,19 @@ Upload CSV → Review Issues → Approve Fixes → Apply to WordPress
 
 ## 🚀 Two Modes
 
-### 🤖 Agent Mode (Default)
-- **Free to use** — no API key required
+### ⚡ Quick Start Mode (Default)
+- **No setup required** — just upload and go
 - 5 free AI suggestions per session (broken links only)
 - Fixes up to 25 pages per session
 - Auto-discovers WordPress Post IDs
 - Perfect for testing and smaller sites
 
-### 🚀 Enterprise Mode
-- **Also free** — bring your own Claude API key
-- Unlimited AI suggestions
-- Unlimited page fixes
-- Requires Post IDs in CSV (2-min Screaming Frog setup)
+### 🚀 Full Mode
+- **Upload Post IDs** to unlock unlimited fixes
+- Fix your entire site in one session
+- Fastest execution (no Post ID discovery needed)
 - Best for large sites with 100+ pages
+- One-time 5-minute setup in Screaming Frog
 
 ---
 
@@ -204,6 +204,22 @@ Screaming Fixes uses [Application Passwords](https://make.wordpress.org/core/202
 2. Scroll to **Application Passwords**
 3. Create one named "Screaming Fixes"
 4. Copy the password (spaces are OK)
+
+---
+
+## 🎯 Post ID Setup (For Enterprise Mode)
+
+To fix unlimited pages, you'll need Post IDs in your Screaming Frog exports. This requires a one-time 5-minute setup.
+
+**[📖 Complete Post ID Setup Guide](POST_ID_SETUP.md)** — includes:
+- Step-by-step Screaming Frog configuration
+- Multiple regex patterns for different WordPress themes
+- AI prompt to identify your site's pattern
+- Troubleshooting tips
+
+**Why Post IDs matter:** WordPress uses numeric IDs internally (like `6125`), not URLs. With Post IDs in your CSV, the tool can update unlimited pages instantly instead of discovering each one.
+
+**Note:** Requires a licensed version of Screaming Frog (~$259/year) for Custom Extraction.
 
 ---
 
