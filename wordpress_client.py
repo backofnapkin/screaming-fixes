@@ -376,6 +376,107 @@ class WordPressClient:
     # Batch Operations
     # =========================================================================
     
+    def update_alt_text(
+        self,
+        post_id: int,
+        img_src: str,
+        new_alt: str,
+        dry_run: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Update alt text for an image in a post's content.
+        
+        Args:
+            post_id: The post ID
+            img_src: Image src URL to find
+            new_alt: New alt text to set
+            dry_run: If True, don't actually update
+        
+        Returns:
+            Dict with success, message, and details
+        """
+        try:
+            content = self.get_post_content(post_id)
+            if not content:
+                return {"success": False, "message": "Could not retrieve post content"}
+            
+            # Escape special regex characters in img_src
+            escaped_src = re.escape(img_src)
+            
+            # Count how many times this image appears
+            # Match img tags with this src (handles both src="url" and src='url')
+            img_pattern = rf'<img[^>]*src=["\']?{escaped_src}["\']?[^>]*>'
+            matches = re.findall(img_pattern, content, flags=re.IGNORECASE)
+            
+            if not matches:
+                return {
+                    "success": False,
+                    "message": "Image not found in content",
+                    "updates": 0
+                }
+            
+            # Escape the new alt text for safe insertion (escape quotes)
+            safe_new_alt = new_alt.replace('"', '&quot;').replace("'", '&#39;')
+            
+            # Function to update alt in a single img tag
+            def update_img_alt(match):
+                img_tag = match.group(0)
+                
+                # Check if alt attribute exists
+                if re.search(r'\salt=["\'][^"\']*["\']', img_tag, re.IGNORECASE):
+                    # Replace existing alt attribute
+                    updated = re.sub(
+                        r'(\salt=)["\'][^"\']*["\']',
+                        f'\\1"{safe_new_alt}"',
+                        img_tag,
+                        flags=re.IGNORECASE
+                    )
+                elif re.search(r'\salt=\S+', img_tag, re.IGNORECASE):
+                    # Handle alt without quotes (alt=something)
+                    updated = re.sub(
+                        r'(\salt=)\S+',
+                        f'\\1"{safe_new_alt}"',
+                        img_tag,
+                        flags=re.IGNORECASE
+                    )
+                else:
+                    # No alt attribute - add one after src
+                    updated = re.sub(
+                        rf'(src=["\']?{escaped_src}["\']?)',
+                        f'\\1 alt="{safe_new_alt}"',
+                        img_tag,
+                        flags=re.IGNORECASE
+                    )
+                
+                return updated
+            
+            # Apply updates to all matching img tags
+            new_content = re.sub(img_pattern, update_img_alt, content, flags=re.IGNORECASE)
+            
+            if new_content == content:
+                return {
+                    "success": False,
+                    "message": "No changes made (alt text may already be set)",
+                    "updates": 0
+                }
+            
+            if not dry_run:
+                self._update_post_content(post_id, new_content)
+            
+            return {
+                "success": True,
+                "message": f"{'Would update' if dry_run else 'Updated'} {len(matches)} image(s)",
+                "updates": len(matches),
+                "dry_run": dry_run
+            }
+            
+        except Exception as e:
+            return {"success": False, "message": f"Error: {str(e)}"}
+    
+    # =========================================================================
+    # Batch Operations
+    # =========================================================================
+    
     def batch_find_post_ids(self, urls: List[str]) -> Dict[str, Optional[int]]:
         """
         Find post IDs for multiple URLs.

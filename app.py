@@ -4,6 +4,11 @@ Built with Streamlit
 
 Upload your Screaming Frog CSV export → Review unique broken URLs → 
 Get AI suggestions → Approve fixes → Apply to WordPress
+
+Supports:
+- Broken Links (4xx errors)
+- Redirect Chains
+- Image Alt Text optimization
 """
 
 import os
@@ -452,7 +457,7 @@ def init_session_state():
     """Initialize session state"""
     defaults = {
         # Task type management
-        'task_type': None,  # 'broken_links' or 'redirect_chains'
+        'task_type': None,  # 'broken_links', 'redirect_chains', or 'image_alt_text'
         'current_task': 'broken_links',  # Which task is currently active
         
         # Broken Links data
@@ -477,6 +482,19 @@ def init_session_state():
         'rc_show_pending': True,
         'rc_page': 0,
         'rc_editing_url': None,
+        
+        # Image Alt Text data
+        'iat_df': None,  # Raw dataframe
+        'iat_domain': None,
+        'iat_images': {},  # Grouped image data by image URL
+        'iat_decisions': {},
+        'iat_excluded_count': 0,  # Count of filtered out images
+        
+        # Image Alt Text filters
+        'iat_show_approved': True,
+        'iat_show_pending': True,
+        'iat_page': 0,
+        'iat_editing_url': None,
         
         # WordPress connection (shared)
         'wp_connected': False,
@@ -589,7 +607,7 @@ def parse_csv(uploaded_file) -> Optional[pd.DataFrame]:
 def detect_csv_type(df: pd.DataFrame) -> str:
     """
     Auto-detect CSV type based on columns.
-    Returns: 'post_ids', 'redirect_chains', or 'broken_links'
+    Returns: 'post_ids', 'redirect_chains', 'image_alt_text', or 'broken_links'
     """
     columns = set(df.columns.str.lower().str.strip())
     
@@ -607,6 +625,20 @@ def detect_csv_type(df: pd.DataFrame) -> str:
     
     # Redirect chains has these distinctive columns
     redirect_chain_indicators = {'final address', 'number of redirects', 'chain type', 'loop'}
+    
+    # Image Alt Text has these distinctive columns (from All Image Inlinks export)
+    # Type column with "Image" or "Hyperlink" values, plus Alt Text column
+    has_type = 'type' in columns
+    has_alt_text = 'alt text' in columns
+    has_source = 'source' in columns
+    
+    # Check if Type column contains image-related values
+    if has_type and has_alt_text and has_source and has_destination:
+        # Check actual values in Type column to confirm it's an image report
+        type_col = df.columns[df.columns.str.lower().str.strip() == 'type'][0]
+        type_values = df[type_col].astype(str).str.lower().unique()
+        if any(t in ['image', 'hyperlink'] for t in type_values):
+            return 'image_alt_text'
     
     # Broken links has these columns
     broken_link_indicators = {'destination', 'status code'}
@@ -779,6 +811,200 @@ def group_redirect_chains(df: pd.DataFrame, domain: str) -> tuple:
         loops_consolidated[key]['count'] += 1
     
     return redirects, list(sitewide_consolidated.values()), list(loops_consolidated.values())
+
+
+# =============================================================================
+# IMAGE ALT TEXT PARSING
+# =============================================================================
+
+def parse_image_alt_text_csv(uploaded_file) -> Optional[pd.DataFrame]:
+    """
+    Parse uploaded All Image Inlinks CSV from Screaming Frog.
+    Filters to Content position only and identifies images needing alt text fixes.
+    """
+    try:
+        df = pd.read_csv(uploaded_file)
+        df.columns = df.columns.str.strip()
+        
+        # Required columns
+        required = ['Source', 'Destination', 'Alt Text']
+        missing = [c for c in required if c not in df.columns]
+        if missing:
+            st.error(f"Missing columns: {', '.join(missing)}")
+            return None
+        
+        # Get Link Position if available for filtering
+        if 'Link Position' in df.columns:
+            before = len(df)
+            # Keep only Content position images
+            df = df[df['Link Position'].str.lower().isin(['content', ''])].copy()
+            filtered_pos = before - len(df)
+            if filtered_pos > 0:
+                st.info(f"📍 Filtered to Content images only ({filtered_pos} header/footer/sidebar images excluded)")
+        
+        # Check for post_id column (case-insensitive)
+        post_id_col = None
+        for col in df.columns:
+            if col.lower().replace('_', '').replace(' ', '') in ['postid', 'post_id', 'id']:
+                post_id_col = col
+                break
+        
+        if post_id_col:
+            df['post_id'] = pd.to_numeric(df[post_id_col], errors='coerce')
+            valid_ids = df['post_id'].notna().sum()
+            st.success(f"✅ Found Post ID column: **{valid_ids}** valid IDs detected")
+        else:
+            df['post_id'] = None
+        
+        return df
+    except Exception as e:
+        st.error(f"Error parsing CSV: {e}")
+        return None
+
+
+def is_excluded_image(img_url: str) -> bool:
+    """Check if image URL matches exclusion patterns (logos, icons, etc.)"""
+    img_lower = img_url.lower()
+    
+    exclusion_patterns = [
+        'logo',
+        'icon',
+        'favicon',
+        'sprite',
+        'placeholder',
+        'avatar',
+        'gravatar.com',
+        'badge',
+        'button',
+        'social',
+        'facebook',
+        'twitter',
+        'linkedin',
+        'instagram',
+        'youtube',
+        'pinterest',
+        'background',
+        'bg-',
+        '-bg.',
+    ]
+    
+    return any(pattern in img_lower for pattern in exclusion_patterns)
+
+
+def is_excluded_page(source_url: str) -> bool:
+    """Check if source URL is a dynamic/listing page that should be excluded"""
+    source_lower = source_url.lower()
+    
+    # Exact homepage match
+    parsed = urlparse(source_url)
+    if parsed.path in ['', '/', '/index.html', '/index.php']:
+        return True
+    
+    exclusion_patterns = [
+        '/page/',
+        '/category/',
+        '/tag/',
+        '/author/',
+        '?listing-page=',
+        '?paged=',
+        '/wp-admin/',
+    ]
+    
+    return any(pattern in source_lower for pattern in exclusion_patterns)
+
+
+def is_bad_alt_text(alt_text: str) -> tuple:
+    """
+    Check if alt text is missing or non-descriptive.
+    Returns: (is_bad: bool, reason: str)
+    """
+    if pd.isna(alt_text) or alt_text.strip() == '':
+        return True, 'missing'
+    
+    alt = alt_text.strip()
+    
+    # Filename patterns
+    filename_patterns = [
+        r'^IMG_\d+',           # IMG_0369
+        r'^DSC[_\d]+',         # DSC_0042, DSC0042
+        r'^DCIM',              # DCIM photos
+        r'^Photo\d*',          # Photo1, Photo
+        r'^Image[-_]?\d*',     # Image-1, Image_1, Image1
+        r'^pic\d+',            # pic1, pic2
+        r'^screenshot',        # screenshot-2024-01-15
+        r'^screen[-_]?shot',   # Screen-Shot, Screen_Shot
+        r'^\d{6,}',            # Long numeric strings like 556316_444422658962091
+        r'^[A-F0-9]{8}-[A-F0-9]{4}',  # UUID patterns
+        r'^\d+[-_]\d+',        # Patterns like 308395697_429013265790380
+    ]
+    
+    for pattern in filename_patterns:
+        if re.match(pattern, alt, re.IGNORECASE):
+            return True, 'filename'
+    
+    # Too short to be descriptive (less than 5 chars, excluding common words)
+    if len(alt) < 5 and alt.lower() not in ['logo', 'icon', 'menu', 'back', 'next']:
+        return True, 'too_short'
+    
+    return False, 'ok'
+
+
+def group_images_for_alt_text(df: pd.DataFrame, domain: str) -> tuple:
+    """
+    Group images by Destination (image URL) for alt text fixing.
+    Filters out excluded images and pages.
+    
+    Returns: (images_dict, excluded_count)
+    """
+    images = {}
+    excluded_count = 0
+    
+    for _, row in df.iterrows():
+        source = row['Source']
+        destination = row['Destination']
+        alt_text = row.get('Alt Text', '')
+        img_type = row.get('Type', 'Image')
+        
+        # Skip excluded pages
+        if is_excluded_page(source):
+            excluded_count += 1
+            continue
+        
+        # Skip excluded image types
+        if is_excluded_image(destination):
+            excluded_count += 1
+            continue
+        
+        # Check if alt text needs fixing
+        is_bad, reason = is_bad_alt_text(alt_text)
+        if not is_bad:
+            excluded_count += 1
+            continue
+        
+        # Use destination (image URL) as the key
+        key = destination
+        
+        if key not in images:
+            images[key] = {
+                'image_url': destination,
+                'current_alt': alt_text if pd.notna(alt_text) else '',
+                'alt_status': reason,  # 'missing', 'filename', 'too_short'
+                'img_type': img_type,  # 'Image' or 'Hyperlink'
+                'sources': [],
+                'source_post_ids': {},
+                'count': 0
+            }
+        
+        images[key]['count'] += 1
+        
+        if source not in images[key]['sources']:
+            images[key]['sources'].append(source)
+        
+        # Store post_id if available
+        if pd.notna(row.get('post_id')):
+            images[key]['source_post_ids'][source] = int(row['post_id'])
+    
+    return images, excluded_count
 
 
 def parse_post_id_csv(uploaded_file) -> Dict[str, int]:
@@ -1000,6 +1226,111 @@ Only output the JSON."""
         return {'action': 'remove', 'url': None, 'notes': f'Error: {str(e)[:100]}'}
 
 
+def get_ai_alt_text_suggestion(image_url: str, info: Dict, domain: str, api_key: str) -> Dict[str, str]:
+    """Get AI suggestion for image alt text using Claude's vision capability"""
+    
+    # Track AI suggestion request (no URLs/PII)
+    is_agent_mode_key = api_key == AGENT_MODE_API_KEY
+    track_event("ai_alt_text_request", {
+        "is_agent_mode_key": is_agent_mode_key,
+        "alt_status": info['alt_status'],
+        "affected_pages": info['count']
+    })
+    
+    if not ANTHROPIC_AVAILABLE:
+        return {'alt_text': '', 'notes': 'Anthropic library not installed.'}
+    
+    try:
+        client = Anthropic(api_key=api_key)
+        
+        # Get context from source pages
+        source_urls = info['sources'][:3]  # First 3 source pages for context
+        source_context = '\n'.join(f"- {url}" for url in source_urls)
+        
+        current_alt = info['current_alt'] if info['current_alt'] else '(empty)'
+        
+        prompt = f"""You are helping optimize image alt text for SEO on {domain}.
+
+IMAGE URL: {image_url}
+CURRENT ALT TEXT: {current_alt}
+ISSUE: {info['alt_status']} (needs descriptive alt text)
+APPEARS ON PAGES:
+{source_context}
+
+Your task:
+1. Look at the image
+2. Consider the context from the page URLs where it appears
+3. Write descriptive, SEO-friendly alt text
+
+Alt text best practices:
+- Be descriptive but concise (10-125 characters ideal)
+- Describe what's actually IN the image
+- Include relevant keywords naturally
+- Don't start with "Image of" or "Picture of" (screen readers already announce it's an image)
+- Consider the page context for relevance
+
+Respond in JSON format:
+{{"alt_text": "your suggested alt text", "notes": "brief explanation of what you see in the image"}}
+
+Only output the JSON."""
+
+        # Try to include the image for vision analysis
+        messages = []
+        
+        # Check if image URL is accessible (basic check)
+        if image_url.startswith('http'):
+            messages = [{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "url",
+                            "url": image_url
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": prompt
+                    }
+                ]
+            }]
+        else:
+            # Fallback to text-only if image URL is relative/invalid
+            messages = [{"role": "user", "content": prompt}]
+        
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=500,
+            messages=messages
+        )
+        
+        result_text = ""
+        for block in response.content:
+            if hasattr(block, 'text'):
+                result_text += block.text
+        
+        try:
+            json_match = re.search(r'\{[^}]+\}', result_text, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group())
+                return {
+                    'alt_text': result.get('alt_text', ''),
+                    'notes': result.get('notes', 'No explanation provided.')
+                }
+        except json.JSONDecodeError:
+            pass
+        
+        return {'alt_text': '', 'notes': result_text[:150] if result_text else 'Could not parse response.'}
+        
+    except Exception as e:
+        error_msg = str(e)
+        # Provide helpful message for common image loading errors
+        if 'Could not process image' in error_msg or 'invalid_request_error' in error_msg:
+            return {'alt_text': '', 'notes': 'Could not load image. The image may be inaccessible, blocked, or in an unsupported format. Try entering alt text manually.'}
+        return {'alt_text': '', 'notes': f'Error: {error_msg[:100]}'}
+
+
 # =============================================================================
 # UI COMPONENTS
 # =============================================================================
@@ -1105,6 +1436,24 @@ def render_upload_section():
         3. Upload it here
         """)
     
+    with st.expander("🖼️ Image Alt Text", expanded=False):
+        st.markdown("""
+        **What it fixes:** Adds or improves alt text for images that have missing or non-descriptive alt attributes (like `IMG_0369` or empty alt text).
+        
+        **How to export:**
+        1. After your crawl completes, go to **Bulk Export → Images → All Image Inlinks**
+        2. Save the CSV file
+        3. Upload it here
+        
+        **Automatic filtering:** The tool automatically excludes:
+        - Logos, icons, and social media buttons
+        - Header, footer, and sidebar images
+        - Images on category, tag, author, and pagination pages
+        - Images that already have descriptive alt text
+        
+        **AI-powered suggestions:** Get Claude to analyze each image and suggest descriptive alt text (requires your own API key).
+        """)
+    
     with st.expander("🆔 Post IDs — Unlock Full Mode (3 min setup, still free!)", expanded=False):
         st.markdown("""
         **What it does:** Maps your URLs to WordPress Post IDs, unlocking unlimited page fixes.
@@ -1128,11 +1477,14 @@ def render_upload_section():
         type=['csv'],
         label_visibility='collapsed',
         key="main_uploader",
-        help="We'll auto-detect the file type: Broken Links, Redirect Chains, or Post IDs"
+        help="We'll auto-detect the file type: Broken Links, Redirect Chains, Image Alt Text, or Post IDs"
     )
     
+    # Check for image alt text data
+    has_image_alt_text = st.session_state.iat_df is not None
+    
     # Show uploaded file status cards
-    if has_post_ids or has_broken_links or has_redirect_chains:
+    if has_post_ids or has_broken_links or has_redirect_chains or has_image_alt_text:
         st.markdown("**Uploaded Files:**")
         
         # Post IDs card
@@ -1173,8 +1525,8 @@ def render_upload_section():
                     st.session_state.decisions = {}
                     st.session_state.domain = None
                     if st.session_state.current_task == 'broken_links':
-                        st.session_state.current_task = 'redirect_chains' if has_redirect_chains else None
-                        st.session_state.task_type = 'redirect_chains' if has_redirect_chains else None
+                        st.session_state.current_task = 'redirect_chains' if has_redirect_chains else ('image_alt_text' if has_image_alt_text else None)
+                        st.session_state.task_type = st.session_state.current_task
                     st.rerun()
         
         # Redirect Chains card
@@ -1198,14 +1550,44 @@ def render_upload_section():
                     st.session_state.rc_sitewide = []
                     st.session_state.rc_loops = []
                     if st.session_state.current_task == 'redirect_chains':
-                        st.session_state.current_task = 'broken_links' if has_broken_links else None
-                        st.session_state.task_type = 'broken_links' if has_broken_links else None
+                        st.session_state.current_task = 'broken_links' if has_broken_links else ('image_alt_text' if has_image_alt_text else None)
+                        st.session_state.task_type = st.session_state.current_task
+                    st.rerun()
+        
+        # Image Alt Text card
+        if has_image_alt_text:
+            image_count = len(st.session_state.iat_images)
+            excluded_count = st.session_state.iat_excluded_count
+            # Count unique source pages
+            all_sources = set()
+            for img_data in st.session_state.iat_images.values():
+                all_sources.update(img_data['sources'])
+            iat_source_count = len(all_sources)
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid #f9a8d4; margin-bottom: 0.5rem;">
+                    <span style="font-weight: 600; color: #9d174d;">🖼️ Image Alt Text</span>
+                    <span style="color: #be185d; margin-left: 0.5rem;">{image_count} images need alt text across {iat_source_count} pages</span>
+                    <span style="color: #9ca3af; margin-left: 0.5rem; font-size: 0.85rem;">({excluded_count} filtered out)</span>
+                </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                if st.button("✕", key="clear_image_alt_text", help="Clear Image Alt Text"):
+                    st.session_state.iat_df = None
+                    st.session_state.iat_images = {}
+                    st.session_state.iat_decisions = {}
+                    st.session_state.iat_domain = None
+                    st.session_state.iat_excluded_count = 0
+                    if st.session_state.current_task == 'image_alt_text':
+                        st.session_state.current_task = 'broken_links' if has_broken_links else ('redirect_chains' if has_redirect_chains else None)
+                        st.session_state.task_type = st.session_state.current_task
                     st.rerun()
         
         st.markdown("")  # Spacing
     
     # Privacy and disclaimer (only show if no files uploaded yet)
-    if not has_post_ids and not has_broken_links and not has_redirect_chains:
+    if not has_post_ids and not has_broken_links and not has_redirect_chains and not has_image_alt_text:
         st.markdown("""
         <div class="privacy-notice" style="margin-top: 0.5rem;">
             🔒 <strong>Your data is safe</strong> — processed in your browser session only. Nothing is saved to any database.
@@ -1237,6 +1619,8 @@ def render_upload_section():
             already_processed = has_post_ids
         elif csv_type == 'redirect_chains':
             already_processed = has_redirect_chains
+        elif csv_type == 'image_alt_text':
+            already_processed = st.session_state.iat_df is not None
         else:  # broken_links
             already_processed = has_broken_links
         
@@ -1246,6 +1630,8 @@ def render_upload_section():
                 success = process_post_id_upload(uploaded)
             elif csv_type == 'redirect_chains':
                 success = process_redirect_chains_upload(uploaded)
+            elif csv_type == 'image_alt_text':
+                success = process_image_alt_text_upload(uploaded)
             else:
                 success = process_broken_links_upload(uploaded)
             
@@ -1417,6 +1803,73 @@ def process_broken_links_upload(uploaded_file) -> bool:
     return False
 
 
+def process_image_alt_text_upload(uploaded_file) -> bool:
+    """Process an uploaded Image Alt Text CSV (All Image Inlinks from Screaming Frog). Returns True if processing succeeded."""
+    df = parse_image_alt_text_csv(uploaded_file)
+    if df is not None and len(df) > 0:
+        domain = detect_domain(df['Source'].tolist())
+        images, excluded_count = group_images_for_alt_text(df, domain)
+        
+        if not images:
+            st.warning("No images found that need alt text fixes after filtering. All images either have good alt text or were excluded (logos, icons, non-content pages, etc.)")
+            return False
+        
+        decisions = {}
+        for img_url in images:
+            decisions[img_url] = {
+                'manual_fix': '',
+                'ai_suggestion': '',
+                'ai_notes': '',
+                'approved_fix': '',
+                'approved_action': '',  # 'replace' or 'ignore'
+            }
+        
+        st.session_state.iat_df = df
+        st.session_state.iat_domain = domain
+        st.session_state.iat_images = images
+        st.session_state.iat_decisions = decisions
+        st.session_state.iat_excluded_count = excluded_count
+        st.session_state.task_type = 'image_alt_text'
+        st.session_state.current_task = 'image_alt_text'
+        
+        # Count unique source pages
+        all_sources = set()
+        for img_data in images.values():
+            all_sources.update(img_data['sources'])
+        source_pages_count = len(all_sources)
+        st.session_state.source_pages_count = source_pages_count  # Store for mode selector
+        
+        # Check if CSV itself has post_id column
+        csv_has_post_ids = df['post_id'].notna().any() if 'post_id' in df.columns else False
+        if csv_has_post_ids:
+            for _, row in df.iterrows():
+                if pd.notna(row.get('post_id')):
+                    st.session_state.post_id_cache[row['Source']] = int(row['post_id'])
+            st.session_state.has_post_ids = True
+        
+        # Match Post IDs if we have them from separate file
+        if st.session_state.post_id_file_uploaded:
+            matched, unmatched = match_post_ids_to_sources(list(all_sources))
+            st.session_state.post_id_matched_count = matched
+            st.session_state.post_id_unmatched_urls = unmatched
+        
+        # Update mode based on Post ID availability
+        st.session_state.selected_mode = 'full' if st.session_state.has_post_ids else 'quick_start'
+        
+        # Track CSV upload
+        track_event("csv_upload", {
+            "type": "image_alt_text",
+            "unique_images": len(images),
+            "total_references": len(df),
+            "excluded_count": excluded_count,
+            "source_pages": source_pages_count,
+            "has_post_ids": st.session_state.has_post_ids
+        })
+        
+        return True
+    return False
+
+
 def render_post_id_match_status(total_pages: int):
     """Render the Post ID matching status after report upload"""
     matched = st.session_state.post_id_matched_count
@@ -1576,13 +2029,17 @@ def render_mode_selector():
         </div>
         """, unsafe_allow_html=True)
     else:
-        # Quick Start Mode active
-        if source_pages <= AGENT_MODE_LIMIT:
-            status_msg = f"✅ {source_pages} pages — ready to fix all of them!"
-            status_color = "#059669"
+        # Quick Start Mode - check if we have source pages or not
+        if source_pages > 0:
+            if source_pages <= AGENT_MODE_LIMIT:
+                status_msg = f"⚠️ {source_pages} pages found — upload Post IDs to enable WordPress fixes"
+                status_color = "#d97706"
+            else:
+                status_msg = f"⚠️ {source_pages} pages found — upload Post IDs to enable WordPress fixes"
+                status_color = "#d97706"
         else:
-            status_msg = f"⚠️ {source_pages} pages — will fix first 25 to test"
-            status_color = "#d97706"
+            status_msg = "Upload a report CSV to get started"
+            status_color = "#64748b"
         
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); padding: 1rem; border-radius: 10px; border: 1px solid #7dd3fc;">
@@ -1590,27 +2047,35 @@ def render_mode_selector():
                 <span style="font-size: 1.25rem;">⚡</span>
                 <span style="font-weight: 600; color: #0c4a6e; font-size: 1.1rem;">Quick Start Mode</span>
             </div>
-            <div style="font-size: 0.9rem; color: #0369a1; margin-top: 0.5rem;">
+            <div style="font-size: 0.9rem; color: {status_color}; margin-top: 0.5rem;">
                 {status_msg}
             </div>
         </div>
         """, unsafe_allow_html=True)
         
-        # Offer upgrade to Full Mode
-        if source_pages > AGENT_MODE_LIMIT:
-            with st.expander("🚀 Want to fix all pages? Upload Post IDs to unlock Full Mode (Still FREE!)"):
+        # Always show the Post ID upload guidance when in Quick Start mode with data
+        if source_pages > 0:
+            with st.expander("🔑 Upload Post IDs to enable WordPress fixes", expanded=True):
                 st.markdown("""
-                After you test out this tool in Quick Start Mode, **Full Mode** lets you fix unlimited pages by uploading a CSV file with Post IDs.
+                **To apply fixes to WordPress, you need to upload Post IDs first.**
                 
-                [Learn how to set up Post ID extraction](https://github.com/backofnapkin/screaming-fixes/blob/main/POST_ID_SETUP.md) in Screaming Frog. This is a **one-time setup that takes 5 minutes**. From there you'll unlock all sorts of technical SEO fixes that you can implement with the same tool.
+                Post IDs map your URLs (like `/how-to-start-a-food-truck/`) to WordPress's internal IDs (like `6125`). Without this mapping, we can't update your content via the WordPress API.
                 
-                **Why do we need Post IDs?**
+                **Quick Setup (one-time, 5 minutes):**
+                1. In Screaming Frog, go to **Configuration → Custom → Extraction**
+                2. Add a regex extractor named `post_id` 
+                3. Re-crawl your site
+                4. Export via **Bulk Export → Custom Extraction → post_id**
+                5. Upload that CSV here
                 
-                WordPress stores every page and post with a unique numeric ID (like `6125`), but your URLs only show the human-friendly slug (like `/how-to-start-a-food-truck/`). To edit content through the WordPress API, we need these Post IDs. Screaming Frog can extract them during a crawl, giving us the map we need to update your entire site automatically.
+                [📖 Full Setup Guide](https://github.com/backofnapkin/screaming-fixes/blob/main/POST_ID_SETUP.md)
                 
                 ---
                 
-                **Ready to upgrade?** Upload your Post IDs CSV in the upload section above — your current report data will be preserved and automatically matched.
+                **Without Post IDs, you can still:**
+                - ✅ Review all images/links that need fixes
+                - ✅ Get AI suggestions for alt text
+                - ✅ Export fixes to CSV/JSON for manual updates
                 """)
 
 
@@ -2911,6 +3376,9 @@ def render_task_switcher():
     rc_count = len(st.session_state.rc_redirects) if st.session_state.rc_redirects else 0
     rc_pending = sum(1 for d in st.session_state.rc_decisions.values() if not d.get('approved_action')) if st.session_state.rc_decisions else 0
     
+    iat_count = len(st.session_state.iat_images) if st.session_state.iat_images else 0
+    iat_pending = sum(1 for d in st.session_state.iat_decisions.values() if not d.get('approved_action')) if st.session_state.iat_decisions else 0
+    
     # Build options list
     options = []
     option_labels = []
@@ -2922,6 +3390,10 @@ def render_task_switcher():
     if rc_count > 0:
         options.append('redirect_chains')
         option_labels.append(f"🔄 Redirect Chains ({rc_pending} pending)" if rc_pending > 0 else f"🔄 Redirect Chains (✓ {rc_count} done)")
+    
+    if iat_count > 0:
+        options.append('image_alt_text')
+        option_labels.append(f"🖼️ Image Alt Text ({iat_pending} pending)" if iat_pending > 0 else f"🖼️ Image Alt Text (✓ {iat_count} done)")
     
     # Only show switcher if we have multiple task types
     if len(options) <= 1:
@@ -3470,13 +3942,588 @@ def run_rc_agent_fixes(approved: List, source_pages_to_fix: set):
         st.metric("❌ Failed", failed)
 
 
+# =============================================================================
+# IMAGE ALT TEXT UI COMPONENTS
+# =============================================================================
+
+def render_iat_metrics():
+    """Render summary metrics for image alt text"""
+    images = st.session_state.iat_images
+    decisions = st.session_state.iat_decisions
+    excluded = st.session_state.iat_excluded_count
+    
+    total = len(images)
+    approved = sum(1 for d in decisions.values() if d['approved_action'])
+    pending = total - approved
+    
+    # Count by alt status
+    missing = sum(1 for img in images.values() if img['alt_status'] == 'missing')
+    filename = sum(1 for img in images.values() if img['alt_status'] == 'filename')
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Total Images", total)
+    with col2:
+        st.metric("Missing Alt", missing)
+    with col3:
+        st.metric("Filename Alt", filename)
+    with col4:
+        st.metric("Pending Review", pending)
+    
+    if excluded > 0:
+        st.caption(f"ℹ️ {excluded} images were filtered out (logos, icons, non-content pages, or already have good alt text)")
+
+
+def render_iat_spreadsheet():
+    """Render the image alt text spreadsheet view"""
+    images = st.session_state.iat_images
+    decisions = st.session_state.iat_decisions
+    
+    if not images:
+        st.info("No images to display")
+        return
+    
+    # Filters
+    col1, col2 = st.columns(2)
+    with col1:
+        show_pending = st.checkbox("Show Pending", value=st.session_state.iat_show_pending, key="iat_filter_pending")
+        st.session_state.iat_show_pending = show_pending
+    with col2:
+        show_approved = st.checkbox("Show Approved", value=st.session_state.iat_show_approved, key="iat_filter_approved")
+        st.session_state.iat_show_approved = show_approved
+    
+    # Filter images
+    filtered_keys = []
+    for key in images:
+        has_approval = bool(decisions[key]['approved_action'])
+        if has_approval and show_approved:
+            filtered_keys.append(key)
+        elif not has_approval and show_pending:
+            filtered_keys.append(key)
+    
+    # Sort by impact (pages affected)
+    filtered_keys.sort(key=lambda k: images[k]['count'], reverse=True)
+    
+    # Pagination
+    page = st.session_state.iat_page
+    per_page = 10
+    total_pages = max(1, (len(filtered_keys) + per_page - 1) // per_page)
+    
+    if page >= total_pages:
+        page = total_pages - 1
+        st.session_state.iat_page = page
+    
+    start_idx = page * per_page
+    end_idx = min(start_idx + per_page, len(filtered_keys))
+    page_keys = filtered_keys[start_idx:end_idx]
+    
+    st.markdown(f"**Showing {start_idx + 1}-{end_idx} of {len(filtered_keys)} images**")
+    
+    # Render each image row
+    for i, key in enumerate(page_keys):
+        is_first_row = (i == 0 and page == 0 and not any(d['approved_action'] for d in decisions.values()))
+        render_iat_row(key, images[key], decisions[key], is_first_row)
+    
+    # Pagination controls
+    if total_pages > 1:
+        pcol1, pcol2, pcol3 = st.columns([1, 2, 1])
+        with pcol1:
+            if st.button("← Previous", disabled=page == 0, key="iat_prev"):
+                st.session_state.iat_page = page - 1
+                st.rerun()
+        with pcol2:
+            st.markdown(f"<div style='text-align:center; padding-top: 0.5rem;'>Page {page+1} of {total_pages}</div>", unsafe_allow_html=True)
+        with pcol3:
+            if st.button("Next →", disabled=page >= total_pages - 1, key="iat_next"):
+                st.session_state.iat_page = page + 1
+                st.rerun()
+
+
+def render_iat_row(img_url: str, info: Dict, decision: Dict, is_first_row: bool = False):
+    """Render a single image alt text row"""
+    
+    # Status badge
+    alt_status = info['alt_status']
+    if alt_status == 'missing':
+        status_badge = '<span style="background: #fecaca; color: #991b1b; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">Missing</span>'
+    elif alt_status == 'filename':
+        status_badge = '<span style="background: #fef3c7; color: #92400e; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">Filename</span>'
+    else:
+        status_badge = '<span style="background: #e0e7ff; color: #3730a3; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">Too Short</span>'
+    
+    # Approval status badge
+    if decision['approved_action'] == 'ignore':
+        approval_badge = '<span class="ignored-badge">⏭️ Ignored</span>'
+    elif decision['approved_action'] == 'replace':
+        approval_badge = '<span class="approved-badge">✓ Replace Alt Text</span>'
+    else:
+        approval_badge = '<span class="pending-badge">⏳ Pending</span>'
+    
+    # Current alt text preview
+    current_alt = info['current_alt'] if info['current_alt'] else '(empty)'
+    current_alt_display = current_alt[:40] + '...' if len(current_alt) > 40 else current_alt
+    
+    # Image URL - show just filename
+    img_filename = img_url.split('/')[-1][:50]
+    
+    st.markdown(f"""
+    <div class="url-row">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+            <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                <span style="font-size: 0.8rem; color: #64748b;">Alt Status:</span>
+                {status_badge}
+                <span style="font-size: 0.8rem; color: #64748b;">Action:</span>
+                {approval_badge}
+            </div>
+            <div style="color: #64748b; font-size: 0.8rem;">Affects {info['count']} page(s)</div>
+        </div>
+        <div style="font-family: monospace; font-size: 0.85rem; color: #134e4a; word-break: break-all;">{img_filename}</div>
+        <div style="font-size: 0.8rem; color: #64748b; margin-top: 0.25rem;">Current: <code>{current_alt_display}</code></div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Show first-row hint if applicable
+    if is_first_row and st.session_state.iat_editing_url is None:
+        st.markdown("""
+        <div style="color: #0d9488; font-size: 0.9rem; font-weight: 500; margin-bottom: 0.25rem;">
+            👇 Start here — click to set alt text for this image
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Action area
+    is_editing = st.session_state.iat_editing_url == img_url
+    
+    col1, col2 = st.columns([1, 5])
+    with col1:
+        if is_editing:
+            if st.button("❌ Close", key=f"iat_close_{img_url}", use_container_width=True):
+                st.session_state.iat_editing_url = None
+                st.rerun()
+        else:
+            if st.button("📝 Set Fix", key=f"iat_edit_{img_url}", use_container_width=True):
+                st.session_state.iat_editing_url = img_url
+                st.rerun()
+    
+    # Show inline edit form if this image is being edited
+    if is_editing:
+        render_iat_edit_form(img_url, info, decision)
+
+
+def render_iat_edit_form(img_url: str, info: Dict, decision: Dict):
+    """Render the inline edit form for image alt text"""
+    st.markdown("""
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-top: 0.5rem;">
+    """, unsafe_allow_html=True)
+    
+    # Show image thumbnail
+    st.markdown("**Image Preview:**")
+    try:
+        st.image(img_url, width=300)
+    except:
+        st.caption("(Could not load image preview)")
+    
+    st.markdown("**Choose a fix for this image:**")
+    
+    # Fix options
+    fix_options = ["✏️ Use Manual", "🤖 Use AI", "⏭️ Ignore"]
+    
+    # Determine default selection
+    if decision['approved_action'] == 'replace':
+        default_idx = 0
+    elif decision['approved_action'] == 'ignore':
+        default_idx = 2
+    else:
+        default_idx = 0
+    
+    selected_fix = st.radio(
+        "Fix type",
+        fix_options,
+        index=default_idx,
+        horizontal=True,
+        key=f"iat_fix_type_{img_url}",
+        label_visibility='collapsed'
+    )
+    
+    # Reduced spacing divider (half the height of st.markdown("---"))
+    st.markdown("<div style='border-top: 1px solid #e2e8f0; margin: 0.5rem 0;'></div>", unsafe_allow_html=True)
+    
+    if selected_fix == "✏️ Use Manual":
+        st.markdown("**What this does:** Sets the alt text to the value you provide. Use when you know exactly what the image shows.")
+        
+        # Text input - get the current value
+        current_value = decision['manual_fix'] or decision['approved_fix'] or ''
+        
+        # Label with character count on same row using columns
+        col_label, col_chars = st.columns([1, 1])
+        with col_label:
+            st.markdown("**Enter alt text:**")
+        with col_chars:
+            # Show character count based on current stored value
+            char_count = len(current_value)
+            if char_count > 0:
+                if char_count < 10:
+                    st.markdown(f"<div style='text-align: right; color: #d97706; font-size: 0.85rem;'>⚠️ {char_count} chars (try to be more descriptive)</div>", unsafe_allow_html=True)
+                elif char_count <= 125:
+                    st.markdown(f"<div style='text-align: right; color: #059669; font-size: 0.85rem;'>✅ {char_count} chars (good length)</div>", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"<div style='text-align: right; color: #d97706; font-size: 0.85rem;'>⚠️ {char_count} chars (consider shortening)</div>", unsafe_allow_html=True)
+        
+        # Text input
+        manual_alt = st.text_input(
+            "Enter alt text:",
+            value=current_value,
+            placeholder="Descriptive alt text for this image",
+            key=f"iat_manual_{img_url}",
+            max_chars=200,
+            label_visibility='collapsed'
+        )
+        
+        if manual_alt != decision['manual_fix']:
+            st.session_state.iat_decisions[img_url]['manual_fix'] = manual_alt
+        
+        # Always show Save button - enabled state, check for content on click
+        if st.button("💾 Save Selection", key=f"iat_save_manual_{img_url}", type="primary", use_container_width=True):
+            if manual_alt:
+                st.session_state.iat_decisions[img_url]['approved_action'] = 'replace'
+                st.session_state.iat_decisions[img_url]['approved_fix'] = manual_alt
+                st.session_state.iat_editing_url = None
+                st.toast("✅ Saved: Replace Alt Text", icon="✅")
+                time.sleep(0.3)
+                st.rerun()
+            else:
+                st.warning("Please enter alt text before saving")
+    
+    elif selected_fix == "🤖 Use AI":
+        st.markdown("**What this does:** AI analyzes the actual image and generates descriptive alt text. Use when you want help describing the image content.")
+        
+        # Check for API key
+        user_has_key = bool(st.session_state.anthropic_key)
+        
+        # Show existing AI suggestion if available
+        if decision['ai_suggestion']:
+            st.markdown("<div style='border-top: 1px solid #e2e8f0; margin: 0.5rem 0;'></div>", unsafe_allow_html=True)
+            st.markdown("**AI Recommendation:**")
+            st.success(f'"{decision["ai_suggestion"]}"')
+            
+            if decision['ai_notes']:
+                st.markdown(f"**Why:** {decision['ai_notes']}")
+            
+            if st.button("💾 Accept AI Suggestion", key=f"iat_save_ai_{img_url}", type="primary", use_container_width=True):
+                st.session_state.iat_decisions[img_url]['approved_action'] = 'replace'
+                st.session_state.iat_decisions[img_url]['approved_fix'] = decision['ai_suggestion']
+                st.session_state.iat_editing_url = None
+                st.toast("✅ Saved: Replace Alt Text", icon="✅")
+                time.sleep(0.3)
+                st.rerun()
+        else:
+            if user_has_key:
+                st.success("✅ Using your API key")
+                if st.button("🔍 Get AI Suggestion", key=f"iat_ai_{img_url}", use_container_width=True):
+                    with st.spinner("AI is analyzing the image..."):
+                        domain = st.session_state.iat_domain or ''
+                        result = get_ai_alt_text_suggestion(img_url, info, domain, st.session_state.anthropic_key)
+                        st.session_state.iat_decisions[img_url]['ai_suggestion'] = result['alt_text']
+                        st.session_state.iat_decisions[img_url]['ai_notes'] = result['notes']
+                        st.rerun()
+            else:
+                st.info("🔑 Enter your Claude API key for AI-powered alt text suggestions")
+                
+                api_key_input = st.text_input(
+                    "Your Claude API Key:",
+                    type="password",
+                    placeholder="sk-ant-...",
+                    key=f"iat_api_key_{img_url}",
+                )
+                if api_key_input:
+                    st.session_state.anthropic_key = api_key_input
+                    st.success("✅ API key saved!")
+                    st.rerun()
+                
+                st.caption("Get your key at [console.anthropic.com](https://console.anthropic.com) • Keys are stored in your browser session only")
+    
+    elif selected_fix == "⏭️ Ignore":
+        st.markdown("**What this does:** Marks this image as reviewed but takes no action. Use for decorative images, images with acceptable alt text, or ones you'll handle manually.")
+        
+        if st.button("💾 Save Selection", key=f"iat_save_ignore_{img_url}", type="primary", use_container_width=True):
+            st.session_state.iat_decisions[img_url]['approved_action'] = 'ignore'
+            st.session_state.iat_decisions[img_url]['approved_fix'] = ''
+            st.session_state.iat_editing_url = None
+            st.toast("✅ Saved: Ignored", icon="✅")
+            time.sleep(0.3)
+            st.rerun()
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def create_iat_export_data() -> List[Dict]:
+    """Create export data from approved image alt text decisions"""
+    decisions = st.session_state.iat_decisions
+    images = st.session_state.iat_images
+    
+    export = []
+    
+    for img_url, decision in decisions.items():
+        if not decision['approved_action'] or decision['approved_action'] == 'ignore':
+            continue
+        
+        info = images[img_url]
+        
+        for source in info['sources']:
+            export.append({
+                'source_url': source,
+                'image_url': img_url,
+                'current_alt': info['current_alt'],
+                'new_alt': decision['approved_fix'],
+                'action': 'replace',
+            })
+    
+    return export
+
+
+def render_iat_export_section():
+    """Render the export section for image alt text"""
+    decisions = st.session_state.iat_decisions
+    images = st.session_state.iat_images
+    
+    # Count approved
+    approved = [(k, v) for k, v in decisions.items() if v['approved_action'] == 'replace']
+    ignored = sum(1 for v in decisions.values() if v['approved_action'] == 'ignore')
+    pending = len(decisions) - len(approved) - ignored
+    
+    has_approved = len(approved) > 0
+    
+    st.markdown(f"""
+    **Summary:** {len(approved)} approved • {ignored} ignored • {pending} pending
+    """)
+    
+    if not has_approved:
+        st.info("Set alt text fixes above to enable export")
+        return
+    
+    # Export buttons
+    export_data = create_iat_export_data()
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        csv_output = pd.DataFrame(export_data).to_csv(index=False)
+        st.download_button(
+            label="📥 Download CSV",
+            data=csv_output,
+            file_name=f"image_alt_fixes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    
+    with col2:
+        json_output = json.dumps(export_data, indent=2)
+        st.download_button(
+            label="📥 Download JSON",
+            data=json_output,
+            file_name=f"image_alt_fixes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+            mime="application/json",
+            use_container_width=True
+        )
+    
+    # WordPress apply section
+    if not st.session_state.wp_connected:
+        st.markdown("---")
+        st.info("💡 Connect to WordPress above to apply fixes directly to your site")
+        return
+    
+    st.markdown("---")
+    st.markdown("**Apply directly to WordPress:**")
+    
+    if not has_approved:
+        st.info("Approve some alt text fixes above first")
+        return
+    
+    # Check if we have Post IDs
+    has_post_ids = st.session_state.has_post_ids
+    post_id_count = len(st.session_state.post_id_cache)
+    
+    # Count how many source pages need fixes
+    source_pages_to_fix = set()
+    for key, decision in approved:
+        for source in images[key]['sources']:
+            source_pages_to_fix.add(source)
+    
+    pages_to_fix = len(source_pages_to_fix)
+    
+    # Count how many pages have Post IDs mapped
+    pages_with_post_ids = sum(1 for url in source_pages_to_fix if url in st.session_state.post_id_cache)
+    
+    if has_post_ids and pages_with_post_ids > 0:
+        # Full Mode with Post IDs
+        st.success(f"🚀 **Full Mode:** {pages_with_post_ids} of {pages_to_fix} pages have Post IDs mapped")
+        
+        if pages_with_post_ids < pages_to_fix:
+            st.warning(f"⚠️ {pages_to_fix - pages_with_post_ids} pages don't have Post IDs and will be skipped")
+        
+        if st.button("🚀 Apply Alt Text Fixes to WordPress", type="primary", use_container_width=True, key="iat_apply"):
+            run_iat_agent_fixes(approved, source_pages_to_fix)
+    else:
+        # No Post IDs - explain what's needed
+        st.warning(f"""
+        **Post IDs Required**
+        
+        To apply fixes to WordPress, you need to upload a Post ID mapping first.
+        
+        **{pages_to_fix} pages** need updates, but we don't have Post IDs for them.
+        
+        👆 Upload your Post IDs CSV in the upload section above, then return here.
+        """)
+
+
+def run_iat_agent_fixes(approved: List, source_pages_to_fix: set):
+    """Run the agent to apply image alt text fixes"""
+    client = st.session_state.wp_client
+    images = st.session_state.iat_images
+    
+    # Build list of all fixes to apply
+    fixes_to_apply = []
+    for img_url, decision in approved:
+        info = images[img_url]
+        for source in info['sources']:
+            if source in source_pages_to_fix:
+                fixes_to_apply.append({
+                    'source_url': source,
+                    'image_url': img_url,
+                    'new_alt': decision['approved_fix'],
+                    'post_id': st.session_state.post_id_cache.get(source)
+                })
+    
+    total_fixes = len(fixes_to_apply)
+    results = []
+    skipped_for_retry = []
+    
+    # Helper function to truncate with ellipsis if needed
+    def truncate(text, max_len):
+        if len(text) <= max_len:
+            return text
+        return text[:max_len] + "..."
+    
+    with st.status(f"Applying {total_fixes} alt text fixes...", expanded=True) as main_status:
+        for i, fix in enumerate(fixes_to_apply):
+            with st.status(f"Fix {i+1}/{total_fixes}", expanded=False) as status:
+                # Clickable page link (truncate display but full link)
+                page_url = fix['source_url']
+                page_display = truncate(page_url, 100)
+                st.markdown(f"📄 Page: [{page_display}]({page_url})")
+                
+                # Step 1: Get Post ID
+                post_id = fix.get('post_id')
+                if not post_id:
+                    st.write("🔍 Looking up Post ID...")
+                    post_id = client.find_post_id_by_url(fix['source_url'])
+                    
+                    if post_id:
+                        st.write(f"✅ Found Post ID: {post_id}")
+                        st.session_state.post_id_cache[fix['source_url']] = post_id
+                    else:
+                        st.write("❌ Could not find Post ID")
+                        results.append({
+                            'source_url': fix['source_url'],
+                            'image_url': fix['image_url'],
+                            'status': 'skipped',
+                            'message': 'Post ID not found'
+                        })
+                        skipped_for_retry.append(fix)
+                        status.update(label=f"⏭️ Skipped", state="error")
+                        continue
+                else:
+                    st.write(f"📄 Post ID: {post_id}")
+                
+                # Step 2: Apply fix (update alt text)
+                st.write(f"🔧 Updating alt text...")
+                
+                # Full image filename (truncate at 80 chars)
+                img_filename = fix['image_url'].split('/')[-1]
+                img_display = truncate(img_filename, 80)
+                st.write(f"   Image: `{img_display}`")
+                
+                # Full alt text (truncate at 150 chars)
+                alt_display = truncate(fix['new_alt'], 150)
+                st.write(f"   New alt: `{alt_display}`")
+                
+                try:
+                    result = client.update_alt_text(post_id, fix['image_url'], fix['new_alt'], dry_run=False)
+                    
+                    if result['success']:
+                        st.write(f"   ✅ {result['message']}")
+                        results.append({
+                            'source_url': fix['source_url'],
+                            'image_url': fix['image_url'],
+                            'new_alt': fix['new_alt'],
+                            'status': 'success',
+                            'message': result['message']
+                        })
+                        status.update(label=f"✅ Success", state="complete")
+                    else:
+                        if 'not found' in result['message'].lower():
+                            st.write(f"   ❌ {result['message']}")
+                            st.write(f"   💡 Common reasons: image may be in a widget, shortcode, or theme template")
+                        else:
+                            st.write(f"   ❌ {result['message']}")
+                        
+                        results.append({
+                            'source_url': fix['source_url'],
+                            'image_url': fix['image_url'],
+                            'new_alt': fix['new_alt'],
+                            'status': 'failed',
+                            'message': result['message']
+                        })
+                        status.update(label=f"❌ Failed", state="error")
+                        
+                except Exception as e:
+                    st.write(f"   ❌ Error: {str(e)}")
+                    results.append({
+                        'source_url': fix['source_url'],
+                        'image_url': fix['image_url'],
+                        'new_alt': fix['new_alt'],
+                        'status': 'failed',
+                        'message': str(e)
+                    })
+                    status.update(label=f"❌ Error", state="error")
+            
+            time.sleep(0.3)
+    
+    # Store results
+    st.session_state.wp_execute_results = results
+    
+    # Summary
+    success = sum(1 for r in results if r['status'] == 'success')
+    skipped = sum(1 for r in results if r['status'] == 'skipped')
+    failed = sum(1 for r in results if r['status'] == 'failed')
+    
+    track_event("wordpress_apply", {
+        "type": "image_alt_text",
+        "total_fixes": len(results),
+        "success": success,
+        "skipped": skipped,
+        "failed": failed
+    })
+    
+    st.markdown("---")
+    st.markdown("### 📊 Execution Complete")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("✅ Success", success)
+    with col2:
+        st.metric("⏭️ Skipped", skipped)
+    with col3:
+        st.metric("❌ Failed", failed)
+
+
 def render_about():
     """Render the About section"""
     st.markdown('<p class="section-header" id="about">About</p>', unsafe_allow_html=True)
     
     st.markdown("""
     **Screaming Fixes** is a free, open-source tool built for SEO professionals who are tired of manually 
-    updating broken links and redirect chains one by one.
+    updating broken links, redirect chains, and image alt text one by one.
     
     *We are not affiliated with, sponsored by, or endorsed by [Screaming Frog SEO Spider](https://www.screamingfrog.co.uk/seo-spider/). 
     We just love using their tool and wanted to help SEOs get even more value from it.*
@@ -3484,6 +4531,7 @@ def render_about():
     **What this tool does:**
     - **Broken Links:** Groups thousands of link references by unique broken URL, with optional AI suggestions
     - **Redirect Chains:** Bulk updates outdated URLs to their final destinations
+    - **Image Alt Text:** Identifies images with missing or non-descriptive alt text, with AI-powered suggestions
     - Requires **human approval** for all fixes before they're applied
     - **Fixes and publishes updates** directly to your live WordPress website
     - Exports to CSV/JSON for use with WordPress or any CMS
@@ -3689,10 +4737,11 @@ def main():
     # Check state AFTER upload section (in case new file was just processed)
     has_broken_links = st.session_state.df is not None
     has_redirect_chains = st.session_state.rc_df is not None
+    has_image_alt_text = st.session_state.iat_df is not None
     has_post_ids = st.session_state.has_post_ids
     
     # If data is loaded, show the workflow below
-    if has_broken_links or has_redirect_chains:
+    if has_broken_links or has_redirect_chains or has_image_alt_text:
         st.markdown("---")
         
         # Show task switcher if multiple tasks
@@ -3727,6 +4776,17 @@ def main():
             st.markdown("---")
             render_export_section()
         
+        elif current_task == 'image_alt_text' and has_image_alt_text:
+            # Image Alt Text workflow
+            st.markdown('<p class="section-header">🖼️ Image Alt Text</p>', unsafe_allow_html=True)
+            render_iat_metrics()
+            st.markdown("---")
+            render_iat_spreadsheet()
+            st.markdown("---")
+            render_wordpress_section()
+            st.markdown("---")
+            render_iat_export_section()
+        
         else:
             # Fallback - show whatever data we have
             if has_redirect_chains:
@@ -3734,6 +4794,9 @@ def main():
                 st.rerun()
             elif has_broken_links:
                 st.session_state.current_task = 'broken_links'
+                st.rerun()
+            elif has_image_alt_text:
+                st.session_state.current_task = 'image_alt_text'
                 st.rerun()
     
     render_about()
