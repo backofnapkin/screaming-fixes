@@ -6274,4 +6274,16 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Check for landing page routing
+    feature = st.query_params.get("feature", "")
+
+    if feature == "reclaim":
+        # Load the backlink reclaim landing page
+        try:
+            from landing_reclaim import render_landing_page
+            render_landing_page()
+        except ImportError as e:
+            st.error(f"Landing page module not found: {e}")
+            main()
+    else:
+        main()
