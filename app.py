@@ -331,6 +331,31 @@ st.markdown("""
         color: #0f766e !important;
     }
     
+    /* Checkbox styling - teal theme */
+    .stCheckbox > label > span {
+        color: #0d9488 !important;
+    }
+    
+    .stCheckbox input[type="checkbox"]:checked + div {
+        background-color: #0d9488 !important;
+        border-color: #0d9488 !important;
+    }
+    
+    /* Streamlit checkbox checked state */
+    [data-testid="stCheckbox"] [data-checked="true"] {
+        background-color: #0d9488 !important;
+    }
+    
+    /* Radio button styling - teal theme */
+    .stRadio > div[role="radiogroup"] > label > div:first-child {
+        border-color: #14b8a6 !important;
+    }
+    
+    .stRadio > div[role="radiogroup"] > label[data-checked="true"] > div:first-child {
+        background-color: #0d9488 !important;
+        border-color: #0d9488 !important;
+    }
+    
     /* Footer */
     .footer {
         text-align: center;
@@ -438,6 +463,121 @@ st.markdown("""
         font-size: 0.8rem;
         font-weight: 600;
     }
+    
+    /* Feature Cards */
+    .feature-card {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 1.25rem;
+        text-align: center;
+        transition: all 0.2s ease;
+        cursor: pointer;
+        height: 100%;
+    }
+    
+    .feature-card:hover {
+        border-color: #14b8a6;
+        box-shadow: 0 4px 12px rgba(20, 184, 166, 0.15);
+        transform: translateY(-2px);
+    }
+    
+    .feature-card.ready {
+        border-color: #a7f3d0;
+        background: linear-gradient(135deg, #f0fdfa 0%, #ffffff 100%);
+    }
+    
+    .feature-card.locked {
+        border-color: #e2e8f0;
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        opacity: 0.85;
+    }
+    
+    .feature-card-icon {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .feature-card-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #134e4a;
+        margin-bottom: 0.35rem;
+    }
+    
+    .feature-card-desc {
+        font-size: 0.85rem;
+        color: #64748b;
+        margin-bottom: 0.75rem;
+        line-height: 1.4;
+    }
+    
+    .feature-card-status {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .feature-card-status.ready {
+        background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+        color: #059669;
+    }
+    
+    .feature-card-status.locked {
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        color: #b45309;
+    }
+    
+    /* Integration Row */
+    .integration-row {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .integration-row.connected {
+        border-color: #a7f3d0;
+        background: linear-gradient(135deg, #f0fdfa 0%, #ffffff 100%);
+    }
+    
+    .integration-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .integration-title {
+        font-weight: 600;
+        color: #134e4a;
+        font-size: 1rem;
+    }
+    
+    .integration-status {
+        font-size: 0.8rem;
+        padding: 0.2rem 0.6rem;
+        border-radius: 12px;
+    }
+    
+    .integration-status.connected {
+        background: #d1fae5;
+        color: #059669;
+    }
+    
+    .integration-status.not-connected {
+        background: #fef3c7;
+        color: #b45309;
+    }
+    
+    .integration-desc {
+        font-size: 0.85rem;
+        color: #64748b;
+        margin-bottom: 0.75rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -482,6 +622,7 @@ def init_session_state():
         'rc_show_pending': True,
         'rc_page': 0,
         'rc_editing_url': None,
+        'rc_show_approve_warning': False,  # Warning modal for 302s
         
         # Image Alt Text data
         'iat_df': None,  # Raw dataframe
@@ -504,7 +645,14 @@ def init_session_state():
         'wp_preview_done': False,
         'wp_was_test_run': False,  # Track if last execution was a test run
         'selected_mode': 'quick_start',  # 'quick_start' or 'full'
-        'anthropic_key': '',  # User's own API key
+        
+        # AI Configuration (future-proofed for multiple providers)
+        'ai_config': {
+            'provider': 'claude',  # 'claude', 'grok', 'openai', etc.
+            'api_key': '',
+            'model': 'claude-sonnet-4-20250514'
+        },
+        'anthropic_key': '',  # Legacy - kept for backwards compatibility
         'ai_suggestions_remaining': AGENT_MODE_FREE_SUGGESTIONS,  # Free suggestions in Quick Start Mode
         
         # Broken Links UI state
@@ -512,6 +660,7 @@ def init_session_state():
         'per_page': 10,
         'filter_internal': True,
         'filter_external': True,
+        'filter_status': None,  # None = All, or specific status code like 404
         'show_approved': True,
         'show_pending': True,
         'bulk_action': None,  # For bulk action confirmation
@@ -529,6 +678,24 @@ def init_session_state():
         'post_id_check_passed': False,  # Sample check found Post IDs
         'post_id_cache': {},  # Cache of URL -> Post ID (found or manual)
         'full_mode_available': False,  # Post IDs available for unlimited fixes
+        
+        # Integrations panel state
+        'show_integrations': False,  # Whether integrations panel is expanded
+        
+        # Bulk AI analysis state
+        'show_bulk_ai_modal': False,
+        'bulk_ai_running': False,
+        'bulk_ai_progress': 0,
+        'bulk_ai_total': 0,
+        'bulk_ai_urls_to_process': [],
+        'bulk_ai_analyzed_urls': set(),
+        'bulk_ai_results_summary': {'replace': 0, 'remove': 0, 'error': 0},
+        'bulk_ai_start_time': 0,
+        'bulk_ai_just_completed': False,
+        'bulk_ai_recent_results': [],  # Recent results for display
+        'bulk_ai_paused_until': 0,  # Timestamp for rate limit pause
+        'bulk_ai_pause_reason': '',  # Reason for pause
+        'bulk_ai_error_state': None,  # Current error state dict
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -626,28 +793,44 @@ def detect_csv_type(df: pd.DataFrame) -> str:
     # Redirect chains has these distinctive columns
     redirect_chain_indicators = {'final address', 'number of redirects', 'chain type', 'loop'}
     
-    # Image Alt Text has these distinctive columns (from All Image Inlinks export)
-    # Type column with "Image" or "Hyperlink" values, plus Alt Text column
+    # Check for redirect chains first (more specific)
+    if len(redirect_chain_indicators & columns) >= 2:
+        return 'redirect_chains'
+    
+    # Broken links has Status Code - this is the key differentiator
+    has_status_code = 'status code' in columns
+    has_source = 'source' in columns
     has_type = 'type' in columns
     has_alt_text = 'alt text' in columns
-    has_source = 'source' in columns
     
-    # Check if Type column contains image-related values
+    # If it has Status Code, it's likely broken links (4xx errors)
+    # Check the status codes to confirm - broken links have 4xx/5xx status codes
+    if has_status_code and has_source and has_destination:
+        # Check actual status code values
+        status_col = df.columns[df.columns.str.lower().str.strip() == 'status code'][0]
+        try:
+            status_values = pd.to_numeric(df[status_col], errors='coerce').dropna()
+            if len(status_values) > 0:
+                # If we have 4xx or 5xx status codes, it's a broken links report
+                avg_status = status_values.mean()
+                if avg_status >= 400:
+                    return 'broken_links'
+        except:
+            pass
+    
+    # Image Alt Text has these distinctive columns (from All Image Inlinks export)
+    # Key differentiator: Type column with "Image" values (not just "Hyperlink")
+    # AND typically no error status codes
     if has_type and has_alt_text and has_source and has_destination:
         # Check actual values in Type column to confirm it's an image report
         type_col = df.columns[df.columns.str.lower().str.strip() == 'type'][0]
         type_values = df[type_col].astype(str).str.lower().unique()
-        if any(t in ['image', 'hyperlink'] for t in type_values):
+        # Image reports have "Image" type - "Hyperlink" alone is NOT enough
+        if 'image' in type_values:
             return 'image_alt_text'
     
-    # Broken links has these columns
+    # Fall back to broken links if has the basic columns
     broken_link_indicators = {'destination', 'status code'}
-    
-    # Check for redirect chains (more specific)
-    if len(redirect_chain_indicators & columns) >= 2:
-        return 'redirect_chains'
-    
-    # Fall back to broken links
     if len(broken_link_indicators & columns) >= 2:
         return 'broken_links'
     
@@ -1367,127 +1550,524 @@ def render_header():
         </p>
     </div>
     """, unsafe_allow_html=True)
+
+
+def get_integration_status():
+    """Get the status of all integrations"""
+    has_post_ids = st.session_state.post_id_file_uploaded or st.session_state.has_post_ids
+    has_ai_key = bool(st.session_state.ai_config.get('api_key') or st.session_state.anthropic_key)
+    has_wordpress = st.session_state.wp_connected
     
+    return {
+        'post_ids': has_post_ids,
+        'ai_key': has_ai_key,
+        'wordpress': has_wordpress,
+        'all_connected': has_post_ids and has_ai_key and has_wordpress,
+        'count_connected': sum([has_post_ids, has_ai_key, has_wordpress])
+    }
+
+
+def render_feature_cards():
+    """Render the What You Can Fix feature cards section"""
     st.markdown("""
     <h3 style="text-align: center; color: #134e4a; font-weight: 600; margin-bottom: 1.25rem; font-size: 1.35rem;">
-        Four Steps to Thousands of Fixed Links
+        What You Can Fix
     </h3>
-    <div style="display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 1rem;">
-        <div style="flex: 1; text-align: center; padding: 1rem; background: linear-gradient(135deg, #f0fdfa 0%, #ffffff 100%); border-radius: 8px; border: 1px solid #ccfbf1;">
-            <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">1️⃣</div>
-            <div style="font-weight: 600; color: #134e4a;">Upload</div>
-            <div style="font-size: 0.85rem; color: #0d9488;">Screaming Frog CSV</div>
+    """, unsafe_allow_html=True)
+    
+    # Get integration status
+    status = get_integration_status()
+    
+    # Determine card states
+    # Broken Links and Redirect Chains are always ready (they work without full integration)
+    # Image Alt Text requires all 3 integrations
+    broken_links_ready = True
+    redirect_chains_ready = True
+    image_alt_ready = status['all_connected']
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        card_class = "ready" if broken_links_ready else "locked"
+        status_class = "ready" if broken_links_ready else "locked"
+        status_text = "✅ Ready" if broken_links_ready else "🔒 Needs Setup"
+        
+        st.markdown(f"""
+        <div class="feature-card {card_class}">
+            <div class="feature-card-icon">🔗</div>
+            <div class="feature-card-title">Broken Links</div>
+            <div class="feature-card-desc">Find and fix 404s across your entire site</div>
+            <div class="feature-card-status {status_class}">{status_text}</div>
         </div>
-        <div style="flex: 1; text-align: center; padding: 1rem; background: linear-gradient(135deg, #f0fdfa 0%, #ffffff 100%); border-radius: 8px; border: 1px solid #ccfbf1;">
-            <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">2️⃣</div>
-            <div style="font-weight: 600; color: #134e4a;">Review</div>
-            <div style="font-size: 0.85rem; color: #0d9488;">Broken Links</div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        card_class = "ready" if redirect_chains_ready else "locked"
+        status_class = "ready" if redirect_chains_ready else "locked"
+        status_text = "✅ Ready" if redirect_chains_ready else "🔒 Needs Setup"
+        
+        st.markdown(f"""
+        <div class="feature-card {card_class}">
+            <div class="feature-card-icon">🔄</div>
+            <div class="feature-card-title">Redirect Chains</div>
+            <div class="feature-card-desc">Update outdated URLs to final destinations</div>
+            <div class="feature-card-status {status_class}">{status_text}</div>
         </div>
-        <div style="flex: 1; text-align: center; padding: 1rem; background: linear-gradient(135deg, #f0fdfa 0%, #ffffff 100%); border-radius: 8px; border: 1px solid #ccfbf1;">
-            <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">3️⃣</div>
-            <div style="font-weight: 600; color: #134e4a;">Approve</div>
-            <div style="font-size: 0.85rem; color: #0d9488;">Remove or Replace</div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        card_class = "ready" if image_alt_ready else "locked"
+        status_class = "ready" if image_alt_ready else "locked"
+        status_text = "✅ Ready" if image_alt_ready else "🔒 Needs Setup"
+        
+        if image_alt_ready:
+            st.markdown(f"""
+            <div class="feature-card {card_class}">
+                <div class="feature-card-icon">🖼️</div>
+                <div class="feature-card-title">Image Alt Text</div>
+                <div class="feature-card-desc">Add missing descriptions with AI</div>
+                <div class="feature-card-status {status_class}">{status_text}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            # Show locked card
+            st.markdown(f"""
+            <div class="feature-card {card_class}">
+                <div class="feature-card-icon">🖼️</div>
+                <div class="feature-card-title">Image Alt Text</div>
+                <div class="feature-card-desc">Add missing descriptions with AI</div>
+                <div class="feature-card-status {status_class}">{status_text}</div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # Unlock message
+    if not status['all_connected']:
+        missing = []
+        if not status['post_ids']:
+            missing.append("Post IDs")
+        if not status['ai_key']:
+            missing.append("AI API Key")
+        if not status['wordpress']:
+            missing.append("WordPress")
+        
+        st.markdown(f"""
+        <div style="text-align: center; margin-top: 1.25rem; padding: 1rem; background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border-radius: 10px; border: 1px solid #fcd34d;">
+            <div style="font-size: 1rem; color: #92400e; font-weight: 500;">
+                ⚡ <strong>Unlock all features for FREE</strong>
+            </div>
+            <div style="font-size: 0.9rem; color: #a16207; margin-top: 0.35rem;">
+                Complete {3 - status['count_connected']} more integration{'s' if 3 - status['count_connected'] > 1 else ''} to fix everything automatically
+            </div>
         </div>
-        <div style="flex: 1; text-align: center; padding: 1rem; background: linear-gradient(135deg, #f0fdfa 0%, #ffffff 100%); border-radius: 8px; border: 1px solid #ccfbf1;">
-            <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">4️⃣</div>
-            <div style="font-weight: 600; color: #134e4a;">Apply</div>
-            <div style="font-size: 0.85rem; color: #0d9488;">Fix and Export</div>
+        """, unsafe_allow_html=True)
+        
+        # Toggle button
+        btn_label = "▼ Hide Integrations Setup" if st.session_state.show_integrations else "▶ Complete Integrations Setup"
+        if st.button(btn_label, key="toggle_integrations_btn", type="primary", use_container_width=True):
+            st.session_state.show_integrations = not st.session_state.show_integrations
+            st.rerun()
+    else:
+        st.markdown("""
+        <div style="text-align: center; margin-top: 1.25rem; padding: 1rem; background: linear-gradient(135deg, #f0fdfa 0%, #d1fae5 100%); border-radius: 10px; border: 1px solid #6ee7b7;">
+            <div style="font-size: 1rem; color: #065f46; font-weight: 500;">
+                ✅ <strong>All integrations connected!</strong> You have full access to all features.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Still allow toggling to view/manage integrations
+        btn_label = "▼ Hide Integrations" if st.session_state.show_integrations else "⚙️ Manage Integrations"
+        if st.button(btn_label, key="toggle_integrations_btn_connected", use_container_width=True):
+            st.session_state.show_integrations = not st.session_state.show_integrations
+            st.rerun()
+
+
+def render_integrations_panel():
+    """Render the integrations setup panel with progressive steps"""
+    status = get_integration_status()
+    
+    # Header
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #f0fdfa 0%, #ecfeff 100%); padding: 1.25rem 1.5rem; border-radius: 12px; border: 1px solid #99f6e4; margin-top: 1rem; margin-bottom: 1rem;">
+        <div style="font-size: 1.25rem; font-weight: 600; color: #134e4a; margin-bottom: 0.5rem;">
+            ⚙️ Complete Your Integrations
+        </div>
+        <div style="font-size: 0.95rem; color: #0d9488; line-height: 1.5;">
+            Set this up one time and you'll unlock the full power of Screaming Fixes. 
+            Each integration takes just a few minutes — and they're all <strong>completely free</strong>.
         </div>
     </div>
     """, unsafe_allow_html=True)
     
-    st.caption("New here? Check the [Instructions](#instructions) section below for setup help.")
+    # Progress bar
+    completed = status['count_connected']
+    progress_pct = (completed / 3) * 100
+    
+    st.markdown(f"""
+    <div style="margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+            <span style="font-size: 0.9rem; font-weight: 500; color: #134e4a;">Progress</span>
+            <span style="font-size: 0.9rem; color: #0d9488; font-weight: 600;">{completed} of 3 complete</span>
+        </div>
+        <div style="background: #e2e8f0; border-radius: 10px; height: 10px; overflow: hidden;">
+            <div style="background: linear-gradient(90deg, #14b8a6 0%, #0d9488 100%); height: 100%; width: {progress_pct}%; border-radius: 10px; transition: width 0.3s ease;"></div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # ===========================================
+    # STEP 1: Post IDs
+    # ===========================================
+    step1_complete = status['post_ids']
+    step1_status_icon = "✅" if step1_complete else "1️⃣"
+    step1_border_color = "#6ee7b7" if step1_complete else "#fcd34d"
+    step1_bg = "linear-gradient(135deg, #f0fdfa 0%, #d1fae5 100%)" if step1_complete else "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)"
+    step1_header_color = "#065f46" if step1_complete else "#92400e"
+    step1_complete_badge = '<span style="background: #d1fae5; color: #065f46; padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.75rem; margin-left: 0.5rem;">✓ Complete</span>' if step1_complete else ''
+    
+    post_id_count = len(st.session_state.post_id_cache)
+    
+    st.markdown(f"""
+    <div style="background: {step1_bg}; border: 2px solid {step1_border_color}; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <span style="font-size: 1.5rem;">{step1_status_icon}</span>
+            <div>
+                <div style="font-size: 1.1rem; font-weight: 600; color: {step1_header_color};">
+                    Step 1: Upload Post IDs {step1_complete_badge}
+                </div>
+                <div style="font-size: 0.85rem; color: #64748b; margin-top: 0.25rem;">Map your URLs to WordPress Post IDs</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if not step1_complete:
+        st.markdown("""
+        <div style="background: #f8fafc; border-radius: 8px; padding: 1rem; margin-top: -0.5rem; margin-bottom: 1rem; border: 1px solid #e2e8f0;">
+            <div style="font-size: 0.9rem; color: #475569; line-height: 1.6;">
+                <strong>Why this matters:</strong> WordPress stores every page with a numeric Post ID (like <code>6125</code>), 
+                but your URLs only show the slug (like <code>/how-to-start-a-food-truck/</code>). 
+                To edit content via the API, we need this mapping.<br><br>
+                <strong>How to get it:</strong> Set up a one-time Custom Extraction in Screaming Frog to pull Post IDs during your crawl. 
+                Takes ~3 minutes to configure, then you'll have it for every future crawl.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.expander("📋 Step-by-step instructions", expanded=False):
+            st.markdown("""
+            1. In Screaming Frog, go to **Configuration → Custom → Extraction**
+            2. Click **Add** and set:
+               - **Name:** `post_id`
+               - **Type:** Regex
+               - **Regex:** `<link[^>]+rel=['"]shortlink['"][^>]+href=['"][^'"]*\\?p=(\\d+)`
+            3. Click **OK** and re-crawl your site
+            4. Go to **Bulk Export → Custom Extraction → post_id**
+            5. Upload that CSV file below
+            
+            [📖 Full Setup Guide with Screenshots](https://github.com/backofnapkin/screaming-fixes/blob/main/POST_ID_SETUP.md) ・ [🔧 Can't find Post IDs?](https://github.com/backofnapkin/screaming-fixes/blob/main/CUSTOM_POST_ID_GUIDE.md)
+            """)
+        
+        post_id_file = st.file_uploader(
+            "Upload Post IDs CSV",
+            type=['csv'],
+            key="integration_post_id_uploader",
+            label_visibility="collapsed"
+        )
+        
+        if post_id_file:
+            if process_post_id_upload(post_id_file):
+                st.success(f"✅ Post IDs uploaded! {len(st.session_state.post_id_cache)} URLs mapped.")
+                st.rerun()
+    else:
+        st.markdown(f"""
+        <div style="background: #f0fdfa; border-radius: 8px; padding: 0.75rem 1rem; margin-top: -0.5rem; margin-bottom: 1rem; border: 1px solid #a7f3d0;">
+            <span style="color: #065f46;">✅ <strong>{post_id_count} URLs mapped</strong> — Post IDs ready to use</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("🗑️ Clear Post IDs", key="clear_post_ids_integration"):
+            st.session_state.post_id_cache = {}
+            st.session_state.post_id_file_uploaded = False
+            st.session_state.post_id_file_count = 0
+            st.session_state.has_post_ids = False
+            st.session_state.selected_mode = 'quick_start'
+            st.rerun()
+    
+    # ===========================================
+    # STEP 2: AI API Key
+    # ===========================================
+    step2_complete = status['ai_key']
+    step2_status_icon = "✅" if step2_complete else "2️⃣"
+    step2_border_color = "#6ee7b7" if step2_complete else ("#fcd34d" if status['post_ids'] else "#e2e8f0")
+    step2_bg = "linear-gradient(135deg, #f0fdfa 0%, #d1fae5 100%)" if step2_complete else ("linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)" if status['post_ids'] else "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)")
+    step2_header_color = "#065f46" if step2_complete else ("#92400e" if status['post_ids'] else "#64748b")
+    step2_opacity = "1" if status['post_ids'] or step2_complete else "0.7"
+    step2_complete_badge = '<span style="background: #d1fae5; color: #065f46; padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.75rem; margin-left: 0.5rem;">✓ Complete</span>' if step2_complete else ''
+    
+    current_provider = st.session_state.ai_config.get('provider', 'claude')
+    
+    st.markdown(f"""
+    <div style="background: {step2_bg}; border: 2px solid {step2_border_color}; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; opacity: {step2_opacity};">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <span style="font-size: 1.5rem;">{step2_status_icon}</span>
+            <div>
+                <div style="font-size: 1.1rem; font-weight: 600; color: {step2_header_color};">
+                    Step 2: Add Your AI API Key {step2_complete_badge}
+                </div>
+                <div style="font-size: 0.85rem; color: #64748b; margin-top: 0.25rem;">Enable AI-powered fix suggestions</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if not step2_complete:
+        st.markdown("""
+        <div style="background: #f8fafc; border-radius: 8px; padding: 1rem; margin-top: -0.5rem; margin-bottom: 1rem; border: 1px solid #e2e8f0;">
+            <div style="font-size: 0.9rem; color: #475569; line-height: 1.6;">
+                <strong>Why this matters:</strong> AI can analyze your broken links, search for alternatives, 
+                and suggest the best fix — saving you hours of manual research. It can also analyze images 
+                and write descriptive alt text automatically.<br><br>
+                <strong>Cost:</strong> Free credits to start, then ~$0.01 per suggestion. No monthly fees.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.expander("📋 How to get your Claude API key", expanded=False):
+            st.markdown("""
+            1. Go to [console.anthropic.com](https://console.anthropic.com) and create an account
+            2. Add a payment method in **Settings → Billing** (required, but you get free credits)
+            3. Set a **Usage Limit** (e.g., $5/month) to control spending
+            4. Go to **API Keys** → **Create Key**
+            5. Name it `Screaming Fixes` and click **Create**
+            6. **Copy the key immediately** — you won't see it again!
+            
+            Your key looks like: `sk-ant-api03-aBcDeF123...` (about 100+ characters)
+            
+            [📖 Full Setup Guide](https://github.com/backofnapkin/screaming-fixes/blob/main/CLAUDE_API_SETUP.md)
+            """)
+        
+        # Provider selector (future-proofed)
+        st.markdown("**Select AI Provider:**")
+        provider_options = ["Claude (Recommended)", "More providers coming soon..."]
+        selected_provider = st.selectbox(
+            "Select AI Provider",
+            provider_options,
+            index=0,
+            key="ai_provider_select",
+            label_visibility="collapsed"
+        )
+        
+        api_key_input = st.text_input(
+            "Paste your API key",
+            type="password",
+            placeholder="sk-ant-api03-...",
+            key="integration_api_key"
+        )
+        
+        if st.button("💾 Save API Key", key="save_api_key", use_container_width=True, type="primary"):
+            if api_key_input:
+                # Basic validation
+                if api_key_input.startswith('sk-ant-'):
+                    st.session_state.ai_config['provider'] = 'claude'
+                    st.session_state.ai_config['api_key'] = api_key_input
+                    st.session_state.anthropic_key = api_key_input  # Legacy support
+                    st.success("✅ API key saved!")
+                    st.rerun()
+                else:
+                    st.error("This doesn't look like a Claude API key. It should start with `sk-ant-`")
+            else:
+                st.warning("Please enter an API key")
+        
+        st.caption("🔒 Your API key is stored in your browser session only. Never saved to any database.")
+    else:
+        st.markdown(f"""
+        <div style="background: #f0fdfa; border-radius: 8px; padding: 0.75rem 1rem; margin-top: -0.5rem; margin-bottom: 1rem; border: 1px solid #a7f3d0;">
+            <span style="color: #065f46;">✅ <strong>API key configured</strong> — Using {current_provider.title()}</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("🗑️ Clear API Key", key="clear_api_key_integration"):
+            st.session_state.ai_config['api_key'] = ''
+            st.session_state.anthropic_key = ''
+            st.rerun()
+    
+    # ===========================================
+    # STEP 3: WordPress
+    # ===========================================
+    step3_complete = status['wordpress']
+    step3_status_icon = "✅" if step3_complete else "3️⃣"
+    step3_border_color = "#6ee7b7" if step3_complete else ("#fcd34d" if status['ai_key'] else "#e2e8f0")
+    step3_bg = "linear-gradient(135deg, #f0fdfa 0%, #d1fae5 100%)" if step3_complete else ("linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)" if status['ai_key'] else "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)")
+    step3_header_color = "#065f46" if step3_complete else ("#92400e" if status['ai_key'] else "#64748b")
+    step3_opacity = "1" if status['ai_key'] or step3_complete else "0.7"
+    step3_complete_badge = '<span style="background: #d1fae5; color: #065f46; padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.75rem; margin-left: 0.5rem;">✓ Complete</span>' if step3_complete else ''
+    
+    st.markdown(f"""
+    <div style="background: {step3_bg}; border: 2px solid {step3_border_color}; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; opacity: {step3_opacity};">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <span style="font-size: 1.5rem;">{step3_status_icon}</span>
+            <div>
+                <div style="font-size: 1.1rem; font-weight: 600; color: {step3_header_color};">
+                    Step 3: Connect WordPress {step3_complete_badge}
+                </div>
+                <div style="font-size: 0.85rem; color: #64748b; margin-top: 0.25rem;">Apply fixes directly to your site</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if not step3_complete:
+        st.markdown("""
+        <div style="background: #f8fafc; border-radius: 8px; padding: 1rem; margin-top: -0.5rem; margin-bottom: 1rem; border: 1px solid #e2e8f0;">
+            <div style="font-size: 0.9rem; color: #475569; line-height: 1.6;">
+                <strong>Why this matters:</strong> This is where the magic happens! Instead of logging into each post 
+                and clicking publish, we'll apply all your approved fixes automatically via the WordPress REST API. 
+                Fix hundreds of links in minutes, not hours.<br><br>
+                <strong>How to get it:</strong> Generate an Application Password in your WordPress admin. 
+                Takes about 2 minutes. Your regular login password won't work — you need this special API password.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.expander("📋 Step-by-step instructions", expanded=False):
+            st.markdown("""
+            1. Log into your **WordPress Admin** dashboard
+            2. Go to **Users → Profile** (or click your name in the top-right)
+            3. Scroll down to the **Application Passwords** section
+            4. Enter name: `Screaming Fixes`
+            5. Click **Add New Application Password**
+            6. **Copy the password immediately** — you'll only see it once!
+            7. Enter your details below
+            
+            **Note:** You need WordPress 5.6+ or the Application Passwords plugin.
+            """)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            wp_url = st.text_input(
+                "Site URL",
+                placeholder="https://your-site.com",
+                key="integration_wp_url"
+            )
+        with col2:
+            wp_username = st.text_input(
+                "Username",
+                placeholder="admin",
+                key="integration_wp_username"
+            )
+        
+        wp_password = st.text_input(
+            "Application Password (NOT your login password)",
+            type="password",
+            placeholder="xxxx xxxx xxxx xxxx xxxx xxxx",
+            key="integration_wp_password"
+        )
+        
+        if st.button("🔌 Connect to WordPress", key="connect_wp_integration", type="primary", use_container_width=True):
+            if not all([wp_url, wp_username, wp_password]):
+                st.error("Please fill in all fields")
+            elif not WP_AVAILABLE:
+                st.error("WordPress client not available. Check that wordpress_client.py is present.")
+            else:
+                with st.spinner("Connecting..."):
+                    try:
+                        client = WordPressClient(wp_url, wp_username, wp_password)
+                        result = client.test_connection()
+                        
+                        if result["success"]:
+                            st.session_state.wp_connected = True
+                            st.session_state.wp_client = client
+                            st.success(f"✅ {result['message']}")
+                            st.rerun()
+                        else:
+                            st.error(result["message"])
+                    except Exception as e:
+                        st.error(f"Connection failed: {str(e)}")
+        
+        st.caption("🔒 Credentials stored in your browser session only. Cleared when you close the tab.")
+    else:
+        st.markdown("""
+        <div style="background: #f0fdfa; border-radius: 8px; padding: 0.75rem 1rem; margin-top: -0.5rem; margin-bottom: 1rem; border: 1px solid #a7f3d0;">
+            <span style="color: #065f46;">✅ <strong>WordPress connected</strong> — Ready to apply fixes</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("🔌 Disconnect WordPress", key="disconnect_wp_integration"):
+            if st.session_state.wp_client:
+                st.session_state.wp_client.close()
+            st.session_state.wp_connected = False
+            st.session_state.wp_client = None
+            st.rerun()
+    
+    # ===========================================
+    # COMPLETION MESSAGE
+    # ===========================================
+    if status['all_connected']:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border: 2px solid #6ee7b7; border-radius: 12px; padding: 1.5rem; text-align: center; margin-top: 1rem;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎉</div>
+            <div style="font-size: 1.25rem; font-weight: 600; color: #065f46; margin-bottom: 0.5rem;">
+                All integrations complete!
+            </div>
+            <div style="font-size: 0.95rem; color: #047857;">
+                You now have full access to all features. Upload a Screaming Frog report above to start fixing.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 
 def render_upload_section():
     """Render the CSV upload section - always visible with file status cards"""
-    st.markdown('<p class="section-header">Get Started</p>', unsafe_allow_html=True)
+    st.markdown('<p class="section-header">📤 Upload Reports</p>', unsafe_allow_html=True)
     
     # Check current state
     has_post_ids = st.session_state.post_id_file_uploaded or st.session_state.has_post_ids
     post_id_count = len(st.session_state.post_id_cache)
     has_broken_links = st.session_state.df is not None
     has_redirect_chains = st.session_state.rc_df is not None
+    has_image_alt_text = st.session_state.iat_df is not None
     
-    # Step 1: Crawl instructions
     st.markdown("""
-    **Step 1:** Open [Screaming Frog](https://www.screamingfrog.co.uk/seo-spider/) and run a standard crawl of your site.
-    
-    **Step 2:** Export one of the supported reports below:
+    Export a report from Screaming Frog and upload it here. We'll auto-detect the file type.
     """)
     
-    with st.expander("🔗 Broken Links", expanded=False):
+    with st.expander("🔗 Broken Links — How to export", expanded=False):
         st.markdown("""
-        **What it fixes:** Removes or replaces broken links (404s, 500s, etc.) across your site.
-        
-        **How to export:**
-        1. After your crawl completes, go to **Bulk Export → Response Codes → Client Error (4xx) → Inlinks**
-        2. Save the CSV file
-        3. Upload it here
+        1. Run a crawl in Screaming Frog
+        2. Go to **Bulk Export → Response Codes → Client Error (4xx) → Inlinks**
+        3. Save and upload the CSV
         """)
     
-    with st.expander("🔄 Redirect Chains", expanded=False):
+    with st.expander("🔄 Redirect Chains — How to export", expanded=False):
         st.markdown("""
-        **What it fixes:** Updates old URLs that redirect through multiple hops to point directly to the final destination.
-        
-        **How to export:**
-        1. After your crawl completes, go to **Reports → Redirects → All Redirects**
-        2. Save the CSV file
-        3. Upload it here
+        1. Run a crawl in Screaming Frog
+        2. Go to **Reports → Redirects → All Redirects**
+        3. Save and upload the CSV
         """)
     
-    with st.expander("🖼️ Image Alt Text", expanded=False):
+    with st.expander("🖼️ Image Alt Text — How to export", expanded=False):
         st.markdown("""
-        **What it fixes:** Adds or improves alt text for images that have missing or non-descriptive alt attributes (like `IMG_0369` or empty alt text).
+        1. Run a crawl in Screaming Frog
+        2. Go to **Bulk Export → Images → All Image Inlinks**
+        3. Save and upload the CSV
         
-        **How to export:**
-        1. After your crawl completes, go to **Bulk Export → Images → All Image Inlinks**
-        2. Save the CSV file
-        3. Upload it here
-        
-        **Automatic filtering:** The tool automatically excludes:
-        - Logos, icons, and social media buttons
-        - Header, footer, and sidebar images
-        - Images on category, tag, author, and pagination pages
-        - Images that already have descriptive alt text
-        
-        **AI-powered suggestions:** Get Claude to analyze each image and suggest descriptive alt text (requires your own API key).
+        *Requires all integrations to be connected (Post IDs + AI + WordPress)*
         """)
-    
-    with st.expander("🆔 Post IDs — Unlock Full Mode (3 min setup, still free!)", expanded=False):
-        st.markdown("""
-        **What it does:** Maps your URLs to WordPress Post IDs, unlocking unlimited page fixes.
-        
-        **Why you need it:** Without Post IDs, you're limited to 25 pages per session. With Post IDs, fix your entire site at once.
-        
-        **How to set up:**
-        1. In Screaming Frog, go to **Configuration → Custom → Extraction**
-        2. Add a new extractor named `post_id` with regex (see [full setup guide](https://github.com/backofnapkin/screaming-fixes/blob/main/POST_ID_SETUP.md))
-        3. Re-crawl your site
-        4. Go to **Bulk Export → Custom Extraction → post_id** to download the CSV
-        5. Upload that CSV here
-        
-        *Requires Screaming Frog license (~$259/year) for Custom Extraction.*
-        """)
-    
-    st.markdown("**Step 3:** Upload your CSV:")
     
     uploaded = st.file_uploader(
         "Upload your Screaming Frog CSV",
         type=['csv'],
         label_visibility='collapsed',
         key="main_uploader",
-        help="We'll auto-detect the file type: Broken Links, Redirect Chains, Image Alt Text, or Post IDs"
+        help="Supported: Broken Links, Redirect Chains, Image Alt Text, or Post IDs"
     )
-    
-    # Check for image alt text data
-    has_image_alt_text = st.session_state.iat_df is not None
     
     # Show uploaded file status cards
     if has_post_ids or has_broken_links or has_redirect_chains or has_image_alt_text:
         st.markdown("**Uploaded Files:**")
         
-        # Post IDs card
+        # Post IDs card (shows if uploaded via main uploader)
         if has_post_ids:
             col1, col2 = st.columns([5, 1])
             with col1:
@@ -1498,7 +2078,7 @@ def render_upload_section():
                 </div>
                 """, unsafe_allow_html=True)
             with col2:
-                if st.button("✕", key="clear_post_ids", help="Clear Post IDs"):
+                if st.button("✕", key="clear_post_ids_upload", help="Clear Post IDs"):
                     st.session_state.post_id_cache = {}
                     st.session_state.post_id_file_uploaded = False
                     st.session_state.post_id_file_count = 0
@@ -1881,15 +2461,10 @@ def render_post_id_match_status(total_pages: int):
     else:
         match_pct = 0
     
-    st.markdown(f"""
-    <div style="background: #f0fdf4; padding: 1rem; border-radius: 8px; border: 1px solid #bbf7d0; margin: 0.5rem 0;">
-        <div style="font-weight: 600; color: #166534; margin-bottom: 0.5rem;">
-            ✅ {matched} of {total_pages} URLs matched with Post IDs ({match_pct:.0f}%)
-        </div>
-    """, unsafe_allow_html=True)
-    
+    # Build the unmatched section if needed
+    unmatched_html = ''
     if unmatched_summary['total'] > 0:
-        st.markdown(f"""
+        unmatched_html = f'''
         <div style="font-size: 0.9rem; color: #15803d;">
             ℹ️ {unmatched_summary['total']} URLs unmatched — this is expected:
             <ul style="margin: 0.25rem 0 0 1.5rem; padding: 0;">
@@ -1898,9 +2473,16 @@ def render_post_id_match_status(total_pages: int):
                 <li>Fix the individual posts and these pages update automatically</li>
             </ul>
         </div>
-        """, unsafe_allow_html=True)
+        '''
     
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(f'''
+    <div style="background: #f0fdf4; padding: 1rem; border-radius: 8px; border: 1px solid #bbf7d0; margin: 0.5rem 0;">
+        <div style="font-weight: 600; color: #166534; margin-bottom: 0.5rem;">
+            ✅ {matched} of {total_pages} URLs matched with Post IDs ({match_pct:.0f}%)
+        </div>
+        {unmatched_html}
+    </div>
+    ''', unsafe_allow_html=True)
 
 
 def render_post_id_extraction_guide():
@@ -2003,82 +2585,6 @@ Please analyze this HTML and:
     """)
 
 
-def render_mode_selector():
-    """Render mode selector after CSV upload - simplified since mode is auto-selected based on Post IDs"""
-    # Mode is now auto-selected based on Post ID availability
-    # This function now just shows status and allows manual override if needed
-    
-    source_pages = st.session_state.source_pages_count
-    has_post_ids = st.session_state.has_post_ids
-    post_id_count = len(st.session_state.post_id_cache)
-    current_mode = st.session_state.selected_mode
-    
-    st.markdown('<p class="section-header">Mode</p>', unsafe_allow_html=True)
-    
-    if has_post_ids:
-        # Full Mode active
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); padding: 1rem; border-radius: 10px; border: 1px solid #6ee7b7;">
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <span style="font-size: 1.25rem;">🚀</span>
-                <span style="font-weight: 600; color: #065f46; font-size: 1.1rem;">Full Mode Active</span>
-            </div>
-            <div style="font-size: 0.9rem; color: #047857; margin-top: 0.5rem;">
-                {post_id_count} Post IDs loaded — fix unlimited pages across your site
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        # Quick Start Mode - check if we have source pages or not
-        if source_pages > 0:
-            if source_pages <= AGENT_MODE_LIMIT:
-                status_msg = f"⚠️ {source_pages} pages found — upload Post IDs to enable WordPress fixes"
-                status_color = "#d97706"
-            else:
-                status_msg = f"⚠️ {source_pages} pages found — upload Post IDs to enable WordPress fixes"
-                status_color = "#d97706"
-        else:
-            status_msg = "Upload a report CSV to get started"
-            status_color = "#64748b"
-        
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); padding: 1rem; border-radius: 10px; border: 1px solid #7dd3fc;">
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <span style="font-size: 1.25rem;">⚡</span>
-                <span style="font-weight: 600; color: #0c4a6e; font-size: 1.1rem;">Quick Start Mode</span>
-            </div>
-            <div style="font-size: 0.9rem; color: {status_color}; margin-top: 0.5rem;">
-                {status_msg}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Always show the Post ID upload guidance when in Quick Start mode with data
-        if source_pages > 0:
-            with st.expander("🔑 Upload Post IDs to enable WordPress fixes", expanded=True):
-                st.markdown("""
-                **To apply fixes to WordPress, you need to upload Post IDs first.**
-                
-                Post IDs map your URLs (like `/how-to-start-a-food-truck/`) to WordPress's internal IDs (like `6125`). Without this mapping, we can't update your content via the WordPress API.
-                
-                **Quick Setup (one-time, 5 minutes):**
-                1. In Screaming Frog, go to **Configuration → Custom → Extraction**
-                2. Add a regex extractor named `post_id` 
-                3. Re-crawl your site
-                4. Export via **Bulk Export → Custom Extraction → post_id**
-                5. Upload that CSV here
-                
-                [📖 Full Setup Guide](https://github.com/backofnapkin/screaming-fixes/blob/main/POST_ID_SETUP.md)
-                
-                ---
-                
-                **Without Post IDs, you can still:**
-                - ✅ Review all images/links that need fixes
-                - ✅ Get AI suggestions for alt text
-                - ✅ Export fixes to CSV/JSON for manual updates
-                """)
-
-
 def render_metrics():
     """Render summary metrics"""
     broken_urls = st.session_state.broken_urls
@@ -2102,96 +2608,110 @@ def render_metrics():
 
 
 def render_spreadsheet():
-    """Render the main spreadsheet view"""
+    """Render the main spreadsheet view - compact inline editing"""
     broken_urls = st.session_state.broken_urls
     decisions = st.session_state.decisions
     domain = st.session_state.domain
     
-    # User guidance
-    with st.expander("📖 How to use this tool", expanded=False):
-        st.markdown("""
-        **Review each broken URL and choose an action:**
-        
-        1. **Click on a URL row** to expand it and see your options
-        2. **Check the URL** — click the link to verify it's actually broken (Screaming Frog sometimes has false positives)
-        3. **Choose an action:**
-           - **🗑️ Remove Link** — Deletes the link but keeps the anchor text visible on your page
-           - **✓ Use Manual** — Enter a replacement URL yourself, then click to approve
-           - **✓ Use AI** — Get an AI suggestion (requires API key), then approve if correct
-           - **⏭️ Ignore** — Mark as reviewed but take no action (for false positives)
-        
-        4. **Export or Apply** — Once you've approved your fixes, scroll down to export as CSV/JSON or apply directly to WordPress
-        
-        💡 **Tip:** Each broken URL may appear on multiple pages. Fix it once here, and it applies everywhere.
-        """)
-    
-    # Filters
-    st.markdown("**Filters:**")
-    filter_cols = st.columns(4)
-    with filter_cols[0]:
-        st.session_state.filter_internal = st.checkbox("Internal", value=True)
-    with filter_cols[1]:
-        st.session_state.filter_external = st.checkbox("External", value=True)
-    with filter_cols[2]:
-        st.session_state.show_pending = st.checkbox("Pending", value=True)
-    with filter_cols[3]:
-        st.session_state.show_approved = st.checkbox("Approved", value=True)
-    
-    # Count pending URLs for bulk actions
+    # Count pending for bulk actions
     pending_urls = [url for url, d in decisions.items() if not d['approved_action']]
-    pending_internal = [url for url in pending_urls if broken_urls[url]['is_internal']]
-    pending_external = [url for url in pending_urls if not broken_urls[url]['is_internal']]
+    has_ai_key = bool(st.session_state.anthropic_key) or (AGENT_MODE_API_KEY and st.session_state.ai_suggestions_remaining > 0)
     
-    # Bulk actions
-    if pending_urls:
-        with st.expander(f"⚡ Bulk Actions ({len(pending_urls)} pending)", expanded=False):
-            st.markdown("Apply the same action to multiple URLs at once:")
-            
-            bulk_cols = st.columns(3)
-            
-            with bulk_cols[0]:
-                if st.button(f"🗑️ Remove All Pending ({len(pending_urls)})", use_container_width=True):
-                    st.session_state.bulk_action = 'remove_all'
-                    
-            with bulk_cols[1]:
-                if st.button(f"🗑️ Remove Internal ({len(pending_internal)})", use_container_width=True, disabled=len(pending_internal) == 0):
-                    st.session_state.bulk_action = 'remove_internal'
-                    
-            with bulk_cols[2]:
-                if st.button(f"⏭️ Ignore External ({len(pending_external)})", use_container_width=True, disabled=len(pending_external) == 0):
-                    st.session_state.bulk_action = 'ignore_external'
-            
-            # Handle bulk action confirmation
-            if st.session_state.get('bulk_action'):
-                action = st.session_state.bulk_action
-                
-                if action == 'remove_all':
-                    st.warning(f"⚠️ This will mark **{len(pending_urls)} URLs** for link removal.")
-                    target_urls = pending_urls
-                    action_type = 'remove'
-                elif action == 'remove_internal':
-                    st.warning(f"⚠️ This will mark **{len(pending_internal)} internal URLs** for link removal.")
-                    target_urls = pending_internal
-                    action_type = 'remove'
-                elif action == 'ignore_external':
-                    st.warning(f"⚠️ This will mark **{len(pending_external)} external URLs** as ignored.")
-                    target_urls = pending_external
-                    action_type = 'ignore'
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("✅ Confirm", type="primary", use_container_width=True):
-                        for url in target_urls:
-                            st.session_state.decisions[url]['approved_action'] = action_type
-                            st.session_state.decisions[url]['approved_fix'] = ''
-                        st.session_state.bulk_action = None
-                        st.toast(f"✅ Applied to {len(target_urls)} URLs", icon="✅")
-                        time.sleep(0.5)
-                        st.rerun()
-                with col2:
-                    if st.button("❌ Cancel", use_container_width=True):
-                        st.session_state.bulk_action = None
-                        st.rerun()
+    # Top action bar
+    st.markdown("---")
+    action_cols = st.columns([2, 2, 2])
+    
+    with action_cols[0]:
+        if has_ai_key and len(pending_urls) > 0:
+            if st.button(f"🤖 Bulk AI Analyze ({len(pending_urls)})", type="primary", use_container_width=True, help="Get AI suggestions for all pending URLs"):
+                st.session_state.show_bulk_ai_modal = True
+                st.rerun()
+        else:
+            st.button(f"🤖 Bulk AI Analyze", use_container_width=True, disabled=True, help="Add API key to enable")
+    
+    with action_cols[1]:
+        # Count URLs with AI suggestions ready to approve
+        ai_ready = [url for url, d in decisions.items() if d['ai_action'] and not d['approved_action']]
+        if ai_ready:
+            if st.button(f"✅ Approve All AI ({len(ai_ready)})", use_container_width=True, help="Approve all pending AI suggestions"):
+                for url in ai_ready:
+                    decisions[url]['approved_action'] = decisions[url]['ai_action']
+                    decisions[url]['approved_fix'] = decisions[url]['ai_suggestion']
+                st.toast(f"✅ Approved {len(ai_ready)} AI suggestions", icon="✅")
+                time.sleep(0.3)
+                st.rerun()
+        else:
+            st.button("✅ Approve All AI", use_container_width=True, disabled=True, help="No AI suggestions to approve")
+    
+    with action_cols[2]:
+        approved_count = sum(1 for d in decisions.values() if d['approved_action'])
+        if st.button(f"📥 Export ({approved_count})", use_container_width=True, disabled=approved_count == 0):
+            st.session_state.scroll_to_export = True
+    
+    # Handle bulk AI modal
+    if st.session_state.get('show_bulk_ai_modal'):
+        render_bulk_ai_modal(pending_urls, broken_urls, domain)
+        return
+    
+    st.markdown("---")
+    
+    # Compact filters row - consolidated dropdowns
+    filter_cols = st.columns([1.5, 1.5, 1.2, 1.2, 1.5])
+    
+    with filter_cols[0]:
+        # Link type filter (All/Internal/External)
+        link_type_options = ["All Links", "Internal Only", "External Only"]
+        current_link_type = "All Links"
+        if st.session_state.get('filter_internal', True) and not st.session_state.get('filter_external', True):
+            current_link_type = "Internal Only"
+        elif not st.session_state.get('filter_internal', True) and st.session_state.get('filter_external', True):
+            current_link_type = "External Only"
+        
+        selected_link_type = st.selectbox(
+            "Link Type",
+            link_type_options,
+            index=link_type_options.index(current_link_type),
+            key="link_type_filter",
+            label_visibility="collapsed"
+        )
+        # Update session state based on selection
+        if selected_link_type == "All Links":
+            st.session_state.filter_internal = True
+            st.session_state.filter_external = True
+        elif selected_link_type == "Internal Only":
+            st.session_state.filter_internal = True
+            st.session_state.filter_external = False
+        else:  # External Only
+            st.session_state.filter_internal = False
+            st.session_state.filter_external = True
+    
+    with filter_cols[1]:
+        # Status code filter
+        status_codes = sorted(set(info['status_code'] for info in broken_urls.values()))
+        status_options = ["All Status Codes"] + [str(code) for code in status_codes]
+        selected_status = st.selectbox(
+            "Status",
+            status_options,
+            index=0,
+            key="status_filter",
+            label_visibility="collapsed"
+        )
+        st.session_state.filter_status = None if selected_status == "All Status Codes" else int(selected_status)
+    
+    with filter_cols[2]:
+        st.session_state.show_pending = st.checkbox("Pending", value=st.session_state.get('show_pending', True), key="f_pend")
+    
+    with filter_cols[3]:
+        st.session_state.show_approved = st.checkbox("Approved", value=st.session_state.get('show_approved', True), key="f_appr")
+    
+    with filter_cols[4]:
+        sort_option = st.selectbox(
+            "Sort",
+            ["Impact ↓", "Status Code", "Internal First", "External First"],
+            index=0,
+            key="sort_select",
+            label_visibility="collapsed"
+        )
     
     # Apply filters
     filtered_urls = []
@@ -2200,50 +2720,36 @@ def render_spreadsheet():
             continue
         if not info['is_internal'] and not st.session_state.filter_external:
             continue
-        
+        # Status code filter
+        if st.session_state.get('filter_status') and info['status_code'] != st.session_state.filter_status:
+            continue
         has_approval = bool(decisions[url]['approved_action'])
         if has_approval and not st.session_state.show_approved:
             continue
         if not has_approval and not st.session_state.show_pending:
             continue
-        
         filtered_urls.append(url)
     
     if not filtered_urls:
         st.info("No URLs match your filters")
         return
     
-    # Sort options
-    sort_col1, sort_col2 = st.columns([1, 3])
-    with sort_col1:
-        sort_option = st.selectbox(
-            "Sort by:",
-            ["Impact (pages affected)", "Status Code", "Internal First", "External First"],
-            index=["impact", "status_code", "internal_first", "external_first"].index(st.session_state.sort_by) if st.session_state.sort_by in ["impact", "status_code", "internal_first", "external_first"] else 0,
-            key="sort_selector"
-        )
-        # Map display to value
-        sort_map = {
-            "Impact (pages affected)": "impact",
-            "Status Code": "status_code",
-            "Internal First": "internal_first",
-            "External First": "external_first"
-        }
-        st.session_state.sort_by = sort_map[sort_option]
-    
     # Apply sorting
-    if st.session_state.sort_by == "impact":
+    sort_map = {"Impact ↓": "impact", "Status Code": "status_code", "Internal First": "internal_first", "External First": "external_first"}
+    sort_by = sort_map.get(sort_option, "impact")
+    
+    if sort_by == "impact":
         filtered_urls.sort(key=lambda u: broken_urls[u]['count'], reverse=True)
-    elif st.session_state.sort_by == "status_code":
+    elif sort_by == "status_code":
         filtered_urls.sort(key=lambda u: broken_urls[u]['status_code'])
-    elif st.session_state.sort_by == "internal_first":
+    elif sort_by == "internal_first":
         filtered_urls.sort(key=lambda u: (0 if broken_urls[u]['is_internal'] else 1, -broken_urls[u]['count']))
-    elif st.session_state.sort_by == "external_first":
+    elif sort_by == "external_first":
         filtered_urls.sort(key=lambda u: (1 if broken_urls[u]['is_internal'] else 0, -broken_urls[u]['count']))
     
     # Pagination
     total = len(filtered_urls)
-    per_page = st.session_state.per_page
+    per_page = 15  # More rows visible
     total_pages = max(1, (total + per_page - 1) // per_page)
     page = min(st.session_state.page, total_pages - 1)
     
@@ -2251,332 +2757,840 @@ def render_spreadsheet():
     end = min(start + per_page, total)
     page_urls = filtered_urls[start:end]
     
-    st.markdown(f"**Showing {start+1}-{end} of {total} broken URLs**")
+    # Build descriptive header based on active filters
+    # Link type description
+    if st.session_state.filter_internal and st.session_state.filter_external:
+        link_type_desc = ""
+    elif st.session_state.filter_internal:
+        link_type_desc = "internal "
+    else:
+        link_type_desc = "external "
     
-    # Check if user has made any fixes yet (to show/hide first-row hint)
-    has_any_fixes = any(d['approved_action'] for d in decisions.values())
-    is_on_first_page = page == 0
+    # Status code description
+    status_filter = st.session_state.get('filter_status')
+    if status_filter:
+        status_desc = f" with {status_filter} errors"
+    else:
+        status_desc = ""
     
-    # Render each URL
-    for idx, url in enumerate(page_urls):
-        # Show hint only on first row of first page, before any fixes made
-        is_first_row = (idx == 0 and is_on_first_page and not has_any_fixes)
-        render_url_row(url, broken_urls[url], decisions[url], domain, is_first_row)
+    # Approval status description
+    if st.session_state.show_pending and st.session_state.show_approved:
+        approval_desc = ""
+    elif st.session_state.show_pending:
+        approval_desc = " (pending only)"
+    else:
+        approval_desc = " (approved only)"
+    
+    st.markdown(f"**Showing {start+1}-{end} of {total}** {link_type_desc}broken links{status_desc}{approval_desc}")
+    
+    # Column headers - styled like a spreadsheet with teal branding
+    st.markdown("""
+    <div style="display: flex; background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%); border: 1px solid #99f6e4; border-radius: 8px; padding: 0.5rem 0.75rem; margin: 0.5rem 0;">
+        <div style="flex: 4; font-size: 0.75rem; color: #0d9488; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Broken Link</div>
+        <div style="flex: 4; font-size: 0.75rem; color: #0d9488; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Fix</div>
+        <div style="flex: 1; font-size: 0.75rem; color: #0d9488; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; text-align: center;">Approve</div>
+        <div style="flex: 0.8; font-size: 0.75rem; color: #0d9488; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; text-align: center;">Edit</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Render compact rows
+    for url in page_urls:
+        render_compact_url_row(url, broken_urls[url], decisions[url], domain)
     
     # Pagination
     if total_pages > 1:
         pcol1, pcol2, pcol3 = st.columns([1, 2, 1])
         with pcol1:
-            if st.button("← Previous", disabled=page == 0, key="prev"):
+            if st.button("← Prev", disabled=page == 0, key="prev"):
                 st.session_state.page = page - 1
                 st.rerun()
         with pcol2:
-            st.markdown(f"<div style='text-align:center; padding-top: 0.5rem;'>Page {page+1} of {total_pages}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align:center; padding-top: 0.5rem;'>Page {page+1} / {total_pages}</div>", unsafe_allow_html=True)
         with pcol3:
             if st.button("Next →", disabled=page >= total_pages - 1, key="next"):
                 st.session_state.page = page + 1
                 st.rerun()
 
 
-def render_url_row(url: str, info: Dict, decision: Dict, domain: str, is_first_row: bool = False):
-    """Render a single URL row"""
+def get_batch_ai_suggestions(urls_batch: List[Dict], domain: str, api_key: str) -> List[Dict]:
+    """Get AI suggestions for a batch of URLs (up to 10 at a time)"""
     
-    # Status badge
-    badge_class = 'status-4xx'
-    type_class = 'status-internal' if info['is_internal'] else 'status-external'
-    type_label = 'Internal' if info['is_internal'] else 'External'
+    if not ANTHROPIC_AVAILABLE:
+        return [{'url': item['url'], 'action': 'remove', 'replacement': None, 'notes': 'Anthropic library not installed.'} for item in urls_batch]
     
-    # Approval status badge with fix preview
-    fix_preview = ""
-    if decision['approved_action'] == 'ignore':
-        status_badge = '<span class="ignored-badge">⏭️ Ignored</span>'
-    elif decision['approved_action'] == 'remove':
-        status_badge = '<span class="approved-badge">✓ Remove Link</span>'
-    elif decision['approved_action'] == 'replace':
-        status_badge = '<span class="approved-badge">✓ Replace URL</span>'
-        # Show replacement URL preview
-        replacement = decision['approved_fix']
-        if replacement:
-            short_url = replacement[:40] + '...' if len(replacement) > 40 else replacement
-            fix_preview = f'<div style="font-size: 0.75rem; color: #059669; margin-top: 0.25rem;">→ {short_url}</div>'
-    elif decision['approved_action']:
-        status_badge = f'<span class="approved-badge">✓ {decision["approved_action"].upper()}</span>'
+    try:
+        client = Anthropic(api_key=api_key)
+        
+        # Build batch prompt
+        urls_list = []
+        for i, item in enumerate(urls_batch, 1):
+            anchors = ', '.join(f'"{a}"' for a in item['anchors'][:3]) if item['anchors'] else 'none'
+            link_type = "internal" if item['is_internal'] else "external"
+            urls_list.append(f"{i}. {item['url']} (status: {item['status_code']}, type: {link_type}, anchors: {anchors}, affects: {item['count']} pages)")
+        
+        urls_text = '\n'.join(urls_list)
+        
+        prompt = f"""You are helping fix broken links on {domain}.
+
+Here are {len(urls_batch)} broken URLs to analyze:
+
+{urls_text}
+
+For each URL, determine if we should:
+- REMOVE: Delete the link but keep anchor text (use when no good replacement exists)
+- REPLACE: Replace with a working URL (only if you find a real replacement)
+
+Use web search to check if content has moved to new URLs.
+
+Respond with a JSON array, one object per URL in order:
+[
+  {{"index": 1, "action": "remove" or "replace", "url": "replacement URL or null", "notes": "brief 1-sentence explanation"}},
+  {{"index": 2, "action": "...", "url": "...", "notes": "..."}},
+  ...
+]
+
+Only output the JSON array, nothing else."""
+
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=2000,
+            tools=[{
+                "type": "web_search_20250305",
+                "name": "web_search",
+                "max_uses": 10
+            }],
+            messages=[{"role": "user", "content": prompt}]
+        )
+        
+        result_text = ""
+        for block in response.content:
+            if hasattr(block, 'text'):
+                result_text += block.text
+        
+        # Parse JSON array response
+        try:
+            json_match = re.search(r'\[[\s\S]*\]', result_text)
+            if json_match:
+                results = json.loads(json_match.group())
+                # Map results back to URLs
+                output = []
+                for i, item in enumerate(urls_batch):
+                    if i < len(results):
+                        r = results[i]
+                        output.append({
+                            'url': item['url'],
+                            'action': r.get('action', 'remove'),
+                            'replacement': r.get('url'),
+                            'notes': r.get('notes', 'No explanation provided.')
+                        })
+                    else:
+                        output.append({
+                            'url': item['url'],
+                            'action': 'remove',
+                            'replacement': None,
+                            'notes': 'Could not analyze this URL.'
+                        })
+                return output
+        except json.JSONDecodeError:
+            pass
+        
+        # Fallback if parsing fails
+        return [{'url': item['url'], 'action': 'remove', 'replacement': None, 'notes': 'Could not parse AI response.'} for item in urls_batch]
+        
+    except Exception as e:
+        error_msg = str(e)[:100]
+        # Check for rate limit
+        if 'rate' in error_msg.lower() or '429' in error_msg:
+            raise Exception("RATE_LIMIT")
+        return [{'url': item['url'], 'action': 'remove', 'replacement': None, 'notes': f'Error: {error_msg}'} for item in urls_batch]
+
+
+def render_bulk_ai_modal(pending_urls: List[str], broken_urls: Dict, domain: str):
+    """Render bulk AI analysis modal with batch processing"""
+    
+    # Get already analyzed URLs (those with AI suggestions)
+    already_analyzed = st.session_state.get('bulk_ai_analyzed_urls', set())
+    
+    # Filter to only unanalyzed pending URLs
+    unanalyzed_urls = [url for url in pending_urls if url not in already_analyzed]
+    
+    # Sort by impact (page count)
+    unanalyzed_urls.sort(key=lambda u: broken_urls[u]['count'], reverse=True)
+    
+    total_pending = len(pending_urls)
+    total_unanalyzed = len(unanalyzed_urls)
+    
+    # Calculate page impact for different tiers
+    def get_impact(url_list):
+        return sum(broken_urls[u]['count'] for u in url_list)
+    
+    top_25 = unanalyzed_urls[:25]
+    top_50 = unanalyzed_urls[:50]
+    top_100 = unanalyzed_urls[:100]
+    
+    impact_25 = get_impact(top_25)
+    impact_50 = get_impact(top_50)
+    impact_100 = get_impact(top_100)
+    total_impact = get_impact(unanalyzed_urls)
+    
+    # Check if we're in progress
+    if st.session_state.get('bulk_ai_running'):
+        render_bulk_ai_progress(unanalyzed_urls, broken_urls, domain)
+        return
+    
+    # Check if we just completed
+    if st.session_state.get('bulk_ai_just_completed'):
+        render_bulk_ai_completion(total_pending, total_unanalyzed, broken_urls)
+        return
+    
+    # Launch modal
+    st.markdown("### 🤖 Bulk AI Analysis")
+    
+    if total_unanalyzed == 0:
+        st.success("✅ All pending URLs have been analyzed!")
+        if st.button("Close", use_container_width=True):
+            st.session_state.show_bulk_ai_modal = False
+            st.rerun()
+        return
+    
+    st.markdown(f"**{total_unanalyzed}** broken URLs ready to analyze" + (f" ({len(already_analyzed)} already analyzed)" if already_analyzed else ""))
+    
+    st.markdown("**Analyze by impact:**")
+    
+    # Tier selection
+    tier_options = []
+    if len(top_25) > 0:
+        tier_options.append(f"Top 25 (affects {impact_25:,} pages)")
+    if len(top_50) > 25:
+        tier_options.append(f"Top 50 (affects {impact_50:,} pages)")
+    if len(top_100) > 50:
+        tier_options.append(f"Top 100 (affects {impact_100:,} pages)")
+    
+    # Add "All" option (disabled if > 100)
+    if total_unanalyzed > 100:
+        tier_options.append(f"All {total_unanalyzed} — Max 100 per batch")
+    elif total_unanalyzed > 0 and f"Top {total_unanalyzed}" not in str(tier_options):
+        tier_options.append(f"All {total_unanalyzed} (affects {total_impact:,} pages)")
+    
+    # Default to highest available tier up to 100
+    default_idx = min(len(tier_options) - 1, 2) if len(tier_options) > 2 else len(tier_options) - 1
+    
+    selected_tier = st.radio(
+        "Select batch size",
+        tier_options,
+        index=default_idx,
+        label_visibility="collapsed"
+    )
+    
+    # Determine actual count
+    if "Top 25" in selected_tier:
+        analyze_count = 25
+    elif "Top 50" in selected_tier:
+        analyze_count = 50
+    elif "Top 100" in selected_tier or "Max 100" in selected_tier:
+        analyze_count = min(100, total_unanalyzed)
     else:
-        status_badge = '<span class="pending-badge">⏳ Pending</span>'
+        analyze_count = min(total_unanalyzed, 100)
     
-    # Anchors preview
-    anchor_preview = ""
-    if info['anchors']:
-        anchor_preview = f'<span class="anchor-preview">"{info["anchors"][0][:30]}{"..." if len(info["anchors"][0]) > 30 else ""}"</span>'
+    # Time estimate (batch of 10 takes ~8 seconds)
+    batches = (analyze_count + 9) // 10
+    est_seconds = batches * 8
+    est_time = f"{est_seconds // 60}m {est_seconds % 60}s" if est_seconds >= 60 else f"{est_seconds}s"
+    
+    st.markdown(f"⏱️ Estimated time: **~{est_time}**")
+    
+    # Tip about batching
+    if total_unanalyzed > 100:
+        st.info("💡 **Need to analyze more than 100?** Run in batches! After this batch completes, click \"Analyze Next Batch\" to continue. Your previous results are saved.")
+    
+    st.markdown("")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🚀 Start Analysis", type="primary", use_container_width=True):
+            st.session_state.bulk_ai_running = True
+            st.session_state.bulk_ai_progress = 0
+            st.session_state.bulk_ai_total = analyze_count
+            st.session_state.bulk_ai_urls_to_process = unanalyzed_urls[:analyze_count]
+            st.session_state.bulk_ai_results_summary = {'replace': 0, 'remove': 0, 'error': 0}
+            st.session_state.bulk_ai_start_time = time.time()
+            if 'bulk_ai_analyzed_urls' not in st.session_state:
+                st.session_state.bulk_ai_analyzed_urls = set()
+            st.rerun()
+    with col2:
+        if st.button("Cancel", use_container_width=True):
+            st.session_state.show_bulk_ai_modal = False
+            st.rerun()
+
+
+def render_bulk_ai_progress(unanalyzed_urls: List[str], broken_urls: Dict, domain: str):
+    """Render the progress view during bulk AI analysis with detailed feedback"""
+    
+    progress = st.session_state.get('bulk_ai_progress', 0)
+    total = st.session_state.get('bulk_ai_total', 100)
+    urls_to_process = st.session_state.get('bulk_ai_urls_to_process', [])
+    results_summary = st.session_state.get('bulk_ai_results_summary', {'replace': 0, 'remove': 0, 'error': 0})
+    start_time = st.session_state.get('bulk_ai_start_time', time.time())
+    recent_results = st.session_state.get('bulk_ai_recent_results', [])
+    
+    # Check for paused state (rate limit)
+    paused_until = st.session_state.get('bulk_ai_paused_until', 0)
+    pause_reason = st.session_state.get('bulk_ai_pause_reason', '')
+    
+    # Check for error state
+    error_state = st.session_state.get('bulk_ai_error_state', None)
+    
+    # Handle rate limit pause with countdown
+    if paused_until and time.time() < paused_until:
+        remaining_wait = int(paused_until - time.time())
+        
+        st.markdown("### ⏸️ Rate Limit Reached")
+        st.markdown("""
+        Your AI provider limits how many requests can be made per minute. 
+        This is normal for large batches.
+        """)
+        
+        # Countdown progress bar
+        total_wait = 60
+        wait_progress = (total_wait - remaining_wait) / total_wait
+        st.progress(wait_progress)
+        st.markdown(f"⏱️ Auto-resuming in: **{remaining_wait} seconds**")
+        
+        st.markdown(f"Progress saved: **{progress} of {total}** complete")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("▶️ Resume Now", use_container_width=True):
+                st.session_state.bulk_ai_paused_until = 0
+                st.session_state.bulk_ai_pause_reason = ''
+                st.rerun()
+        with col2:
+            if st.button("⏹️ Stop & Keep Results", use_container_width=True):
+                st.session_state.bulk_ai_running = False
+                st.session_state.bulk_ai_paused_until = 0
+                st.session_state.bulk_ai_just_completed = True
+                st.rerun()
+        
+        # Auto-refresh countdown
+        time.sleep(1)
+        st.rerun()
+        return
+    
+    # Clear pause state if time has passed
+    if paused_until and time.time() >= paused_until:
+        st.session_state.bulk_ai_paused_until = 0
+        st.session_state.bulk_ai_pause_reason = ''
+    
+    # Handle error states
+    if error_state:
+        error_type = error_state.get('type', 'unknown')
+        error_msg = error_state.get('message', 'An unknown error occurred')
+        error_batch = error_state.get('batch', 0)
+        
+        if error_type == 'timeout':
+            st.markdown("### ⚠️ Batch Timed Out")
+            st.markdown(f"""
+            The AI took too long to respond (>45 seconds). This can happen 
+            when web searches are slow or the URLs are complex.
+            
+            **Batch {error_batch}** will be skipped and those URLs marked for manual review.
+            """)
+        elif error_type == 'connection':
+            st.markdown("### ❌ Connection Error")
+            st.markdown(f"""
+            Could not reach the AI service. This might be:
+            - Temporary network issue
+            - AI service is down
+            - Invalid API key
+            
+            Error: `{error_msg}`
+            """)
+        else:
+            st.markdown("### ❌ Error Occurred")
+            st.markdown(f"Error: `{error_msg}`")
+        
+        st.markdown(f"Progress saved: **{progress} of {total}** complete")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔄 Retry Batch", type="primary", use_container_width=True):
+                st.session_state.bulk_ai_error_state = None
+                st.rerun()
+        with col2:
+            if st.button("⏭️ Skip & Continue", use_container_width=True):
+                # Skip current batch
+                batch_size = min(10, total - progress)
+                st.session_state.bulk_ai_progress = progress + batch_size
+                st.session_state.bulk_ai_error_state = None
+                # Mark skipped URLs
+                for i in range(batch_size):
+                    if progress + i < len(urls_to_process):
+                        url = urls_to_process[progress + i]
+                        st.session_state.decisions[url]['ai_action'] = ''
+                        st.session_state.decisions[url]['ai_notes'] = 'Skipped due to error - review manually'
+                        results_summary['error'] += 1
+                st.session_state.bulk_ai_results_summary = results_summary
+                st.rerun()
+        
+        if st.button("⏹️ Stop & Keep Results", use_container_width=True):
+            st.session_state.bulk_ai_running = False
+            st.session_state.bulk_ai_error_state = None
+            st.session_state.bulk_ai_just_completed = True
+            st.rerun()
+        return
+    
+    # Normal progress view
+    st.markdown("### 🤖 Analyzing Broken Links...")
+    
+    # Progress bar
+    progress_pct = progress / total if total > 0 else 0
+    st.progress(progress_pct)
+    st.markdown(f"**{progress} of {total}** URLs analyzed")
+    
+    # Time tracking
+    elapsed = time.time() - start_time
+    if progress > 0:
+        rate = elapsed / progress
+        remaining = (total - progress) * rate
+        elapsed_str = f"{int(elapsed // 60)}:{int(elapsed % 60):02d}"
+        remaining_str = f"{int(remaining // 60)}:{int(remaining % 60):02d}"
+        st.markdown(f"⏱️ Elapsed: **{elapsed_str}** | Remaining: **~{remaining_str}**")
+    
+    # Batch info
+    current_batch = (progress // 10) + 1
+    total_batches = (total + 9) // 10
+    batch_start = progress + 1
+    batch_end = min(progress + 10, total)
+    
+    st.markdown(f"📦 **Processing batch {current_batch} of {total_batches}** (URLs {batch_start}-{batch_end})")
+    
+    # AI "thinking" animation
+    thinking_states = [
+        "🔍 Searching web for replacement URLs...",
+        "🌐 Checking if content has moved...",
+        "📊 Analyzing anchor text context...",
+        "🔗 Validating potential replacements...",
+        "💭 Determining best action..."
+    ]
+    thinking_idx = int(time.time() * 0.5) % len(thinking_states)
     
     st.markdown(f"""
-    <div class="url-row">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
-            <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-                <span style="font-size: 0.8rem; color: #64748b;">Status Code:</span>
-                <span class="status-badge {badge_class}">{info['status_code']}</span>
-                <span style="font-size: 0.8rem; color: #64748b;">Link Type:</span>
-                <span class="status-badge {type_class}">{type_label}</span>
-                <span style="font-size: 0.8rem; color: #64748b;">Action:</span>
-                {status_badge}
-            </div>
-            <div style="color: #64748b; font-size: 0.8rem;">Affects {info['count']} page(s)</div>
-        </div>
-        <div class="url-text"><a href="{url}" target="_blank" rel="noopener noreferrer" style="color: #134e4a; text-decoration: none; border-bottom: 1px dashed #99f6e4;">{url}</a> <span style="font-size: 0.7rem; color: #64748b;">↗</span></div>
-        {f'<div style="margin-top: 0.25rem;">{anchor_preview}</div>' if anchor_preview else ''}
-        {fix_preview}
+    <div style="background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px; padding: 0.75rem 1rem; margin: 0.5rem 0;">
+        <span style="color: #0d9488;">{thinking_states[thinking_idx]}</span>
     </div>
     """, unsafe_allow_html=True)
     
-    # Show first-row hint if applicable
-    if is_first_row and st.session_state.editing_url is None:
-        st.markdown("""
-        <div style="color: #0d9488; font-size: 0.9rem; font-weight: 500; margin-bottom: 0.25rem;">
-            👇 Start here — click to set your first fix
-        </div>
-        """, unsafe_allow_html=True)
+    # Recent results feed
+    if recent_results:
+        st.markdown("**Recent results:**")
+        for result in recent_results[-5:]:  # Show last 5
+            url_short = result['url'].replace('https://', '').replace('http://', '')
+            if len(url_short) > 40:
+                url_short = url_short[:37] + "..."
+            
+            if result['action'] == 'replace':
+                replacement_short = result.get('replacement', '')
+                if len(replacement_short) > 30:
+                    replacement_short = replacement_short[:27] + "..."
+                st.markdown(f"- `{url_short}` → **Replace** → `{replacement_short}`")
+            else:
+                reason = result.get('notes', 'no replacement found')
+                if len(reason) > 40:
+                    reason = reason[:37] + "..."
+                st.markdown(f"- `{url_short}` → **Remove** ({reason})")
     
-    # Action area - use button to toggle inline editing
+    # Results tally
+    st.markdown("---")
+    st.markdown("**Totals:**")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Replace", results_summary['replace'])
+    with col2:
+        st.metric("Remove", results_summary['remove'])
+    with col3:
+        st.metric("Undetermined", results_summary['error'])
+    
+    # Stop button
+    if st.button("⏹️ Stop & Keep Results", use_container_width=True):
+        st.session_state.bulk_ai_running = False
+        st.session_state.bulk_ai_just_completed = True
+        st.rerun()
+    
+    # Process next batch
+    if progress < total:
+        batch_urls = urls_to_process[progress:min(progress + 10, total)]
+        
+        if batch_urls:
+            # Prepare batch data
+            batch_data = []
+            for url in batch_urls:
+                info = broken_urls[url]
+                batch_data.append({
+                    'url': url,
+                    'status_code': info['status_code'],
+                    'is_internal': info['is_internal'],
+                    'anchors': info['anchors'],
+                    'count': info['count']
+                })
+            
+            # Get API key
+            api_key = st.session_state.anthropic_key or AGENT_MODE_API_KEY
+            
+            if api_key:
+                try:
+                    # Process batch with timeout
+                    import concurrent.futures
+                    
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(get_batch_ai_suggestions, batch_data, domain, api_key)
+                        try:
+                            results = future.result(timeout=45)  # 45 second timeout
+                        except concurrent.futures.TimeoutError:
+                            st.session_state.bulk_ai_error_state = {
+                                'type': 'timeout',
+                                'message': 'Request took longer than 45 seconds',
+                                'batch': current_batch
+                            }
+                            st.rerun()
+                            return
+                    
+                    # Apply results
+                    new_recent = []
+                    for result in results:
+                        url = result['url']
+                        st.session_state.decisions[url]['ai_action'] = result['action']
+                        st.session_state.decisions[url]['ai_suggestion'] = result['replacement'] or ''
+                        st.session_state.decisions[url]['ai_notes'] = result['notes']
+                        st.session_state.bulk_ai_analyzed_urls.add(url)
+                        
+                        # Track for recent results display
+                        new_recent.append({
+                            'url': url,
+                            'action': result['action'],
+                            'replacement': result['replacement'],
+                            'notes': result['notes']
+                        })
+                        
+                        # Update summary
+                        if result['action'] == 'replace' and result['replacement']:
+                            results_summary['replace'] += 1
+                        elif result['action'] == 'remove':
+                            results_summary['remove'] += 1
+                        else:
+                            results_summary['error'] += 1
+                    
+                    # Update recent results
+                    recent_results.extend(new_recent)
+                    st.session_state.bulk_ai_recent_results = recent_results[-10:]  # Keep last 10
+                    
+                    st.session_state.bulk_ai_results_summary = results_summary
+                    st.session_state.bulk_ai_progress = progress + len(batch_urls)
+                    
+                    # Decrement free suggestions if using agent key
+                    if not st.session_state.anthropic_key and AGENT_MODE_API_KEY:
+                        st.session_state.ai_suggestions_remaining = max(0, st.session_state.ai_suggestions_remaining - len(batch_urls))
+                    
+                    st.rerun()
+                    
+                except Exception as e:
+                    error_str = str(e)
+                    
+                    if "RATE_LIMIT" in error_str or "429" in error_str or "rate" in error_str.lower():
+                        # Set pause state with countdown
+                        st.session_state.bulk_ai_paused_until = time.time() + 60
+                        st.session_state.bulk_ai_pause_reason = 'rate_limit'
+                        st.rerun()
+                    elif "timeout" in error_str.lower() or "timed out" in error_str.lower():
+                        st.session_state.bulk_ai_error_state = {
+                            'type': 'timeout',
+                            'message': error_str[:100],
+                            'batch': current_batch
+                        }
+                        st.rerun()
+                    elif "connection" in error_str.lower() or "network" in error_str.lower():
+                        st.session_state.bulk_ai_error_state = {
+                            'type': 'connection',
+                            'message': error_str[:100],
+                            'batch': current_batch
+                        }
+                        st.rerun()
+                    else:
+                        st.session_state.bulk_ai_error_state = {
+                            'type': 'unknown',
+                            'message': error_str[:150],
+                            'batch': current_batch
+                        }
+                        st.rerun()
+    else:
+        # Done!
+        st.session_state.bulk_ai_running = False
+        st.session_state.bulk_ai_just_completed = True
+        st.rerun()
+
+
+def render_bulk_ai_completion(total_pending: int, total_analyzed: int, broken_urls: Dict):
+    """Render the completion view after bulk AI analysis"""
+    
+    results_summary = st.session_state.get('bulk_ai_results_summary', {'replace': 0, 'remove': 0, 'error': 0})
+    analyzed_urls = st.session_state.get('bulk_ai_analyzed_urls', set())
+    
+    st.markdown("### ✅ Bulk Analysis Complete")
+    
+    analyzed_count = results_summary['replace'] + results_summary['remove'] + results_summary['error']
+    remaining = total_pending - len(analyzed_urls)
+    
+    st.markdown(f"Analyzed **{analyzed_count}** of **{total_pending}** broken URLs")
+    
+    # Results breakdown
+    st.markdown("**Results:**")
+    st.markdown(f"- **{results_summary['replace']}** → Replace with new URL")
+    st.markdown(f"- **{results_summary['remove']}** → Remove link")
+    if results_summary['error'] > 0:
+        st.markdown(f"- **{results_summary['error']}** → Could not determine (review manually)")
+    
+    # Impact summary
+    analyzed_impact = sum(broken_urls[url]['count'] for url in analyzed_urls if url in broken_urls)
+    total_impact = sum(info['count'] for info in broken_urls.values())
+    impact_pct = (analyzed_impact / total_impact * 100) if total_impact > 0 else 0
+    
+    st.markdown(f"📊 These links affect **{analyzed_impact:,}** pages ({impact_pct:.0f}% of total impact)")
+    
+    st.markdown("")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Review Suggestions", type="primary", use_container_width=True):
+            st.session_state.show_bulk_ai_modal = False
+            st.session_state.bulk_ai_just_completed = False
+            st.toast(f"✅ Analyzed {analyzed_count} URLs - review suggestions below", icon="✅")
+            st.rerun()
+    with col2:
+        if remaining > 0:
+            next_batch = min(remaining, 100)
+            if st.button(f"Analyze Next {next_batch}", use_container_width=True):
+                st.session_state.bulk_ai_just_completed = False
+                st.rerun()
+        else:
+            st.button("All URLs Analyzed ✓", use_container_width=True, disabled=True)
+
+
+def render_compact_url_row(url: str, info: Dict, decision: Dict, domain: str):
+    """Render a compact inline-editable URL row with 4 columns"""
+    import html
+    
+    # Determine current state
+    has_ai = bool(decision['ai_action'])
+    is_approved = bool(decision['approved_action'])
     is_editing = st.session_state.editing_url == url
     
-    col1, col2 = st.columns([1, 5])
-    with col1:
-        if is_editing:
-            if st.button("❌ Close", key=f"close_{url}", use_container_width=True):
-                st.session_state.editing_url = None
-                st.rerun()
-        else:
-            if st.button("📝 Set Fix", key=f"edit_{url}", use_container_width=True):
-                st.session_state.editing_url = url
-                st.rerun()
+    # Display URL - strip protocol for display only, keep full URL for link
+    display_url = url.replace('https://', '').replace('http://', '').replace('www.', '')
     
-    # Show inline edit form if this URL is being edited
-    if is_editing:
-        st.markdown("""
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-top: 0.5rem;">
-        """, unsafe_allow_html=True)
+    # Truncate display only if very long (80+ chars)
+    if len(display_url) > 80:
+        truncated_url = display_url[:77] + "..."
+    else:
+        truncated_url = display_url
+    
+    # Escape for HTML safety
+    url_escaped = html.escape(url)
+    truncated_url_escaped = html.escape(truncated_url)
+    
+    # Build the row - 4 column layout: Broken URL | Fix | Approve | Edit
+    with st.container():
+        cols = st.columns([4, 4, 1, 0.8])
         
-        st.markdown("**Choose a fix for this broken link:**")
+        with cols[0]:
+            # Broken URL with link
+            st.markdown(f"<a href='{url_escaped}' target='_blank' style='color: #0f172a; text-decoration: none; font-size: 0.85rem; word-break: break-all;' title='{url_escaped}'>{truncated_url_escaped}</a>", unsafe_allow_html=True)
         
-        # Horizontal radio selection
-        fix_options = ["🗑️ Remove Link", "✏️ Use Manual", "🤖 Use AI", "⏭️ Ignore"]
+        with cols[1]:
+            # Fix/Solution column
+            if is_approved:
+                if decision['approved_action'] == 'remove':
+                    st.markdown(f"<span style='color: #059669; font-size: 0.85rem;'>✅ Remove link</span>", unsafe_allow_html=True)
+                elif decision['approved_action'] == 'replace':
+                    fix_url = decision['approved_fix']
+                    fix_url_escaped = html.escape(fix_url)
+                    fix_display = fix_url.replace('https://', '').replace('http://', '').replace('www.', '')
+                    if len(fix_display) > 50:
+                        fix_display = fix_display[:47] + "..."
+                    fix_display_escaped = html.escape(fix_display)
+                    st.markdown(f"<span style='color: #059669; font-size: 0.85rem;'>✅ </span><a href='{fix_url_escaped}' target='_blank' style='color: #059669; text-decoration: none; font-size: 0.85rem;' title='{fix_url_escaped}'>{fix_display_escaped}</a>", unsafe_allow_html=True)
+                elif decision['approved_action'] == 'ignore':
+                    st.markdown(f"<span style='color: #64748b; font-size: 0.85rem;'>⏭️ Ignored</span>", unsafe_allow_html=True)
+            elif has_ai:
+                if decision['ai_action'] == 'remove':
+                    st.markdown(f"<span style='color: #ca8a04; font-size: 0.85rem;'>🤖 Remove link</span>", unsafe_allow_html=True)
+                else:
+                    ai_url = decision['ai_suggestion']
+                    ai_url_escaped = html.escape(ai_url)
+                    ai_display = ai_url.replace('https://', '').replace('http://', '').replace('www.', '')
+                    if len(ai_display) > 50:
+                        ai_display = ai_display[:47] + "..."
+                    ai_display_escaped = html.escape(ai_display)
+                    st.markdown(f"<span style='color: #ca8a04; font-size: 0.85rem;'>🤖 </span><a href='{ai_url_escaped}' target='_blank' style='color: #ca8a04; text-decoration: none; font-size: 0.85rem;' title='{ai_url_escaped}'>{ai_display_escaped}</a>", unsafe_allow_html=True)
+            else:
+                st.markdown(f"<span style='color: #94a3b8; font-size: 0.85rem;'>—</span>", unsafe_allow_html=True)
         
-        # Determine default selection based on current state
-        if decision['approved_action'] == 'remove':
-            default_idx = 0
-        elif decision['approved_action'] == 'replace':
-            default_idx = 1
-        elif decision['approved_action'] == 'ignore':
-            default_idx = 3
-        else:
-            default_idx = 0
+        with cols[2]:
+            # Approve column - checkbox style
+            if is_approved:
+                # Already approved - show green check
+                st.markdown("<span style='color: #22c55e; font-size: 1.2rem;'>✓</span>", unsafe_allow_html=True)
+            elif has_ai:
+                # Has AI suggestion - show clickable approve checkbox
+                if st.button("☐", key=f"approve_ai_{url}", help="Approve AI suggestion"):
+                    decision['approved_action'] = decision['ai_action']
+                    decision['approved_fix'] = decision['ai_suggestion']
+                    st.toast("✅ Approved", icon="✅")
+                    st.rerun()
+            else:
+                # No suggestion yet - show dash
+                st.markdown("<span style='color: #cbd5e1;'>—</span>", unsafe_allow_html=True)
         
-        selected_fix = st.radio(
-            "Fix type",
-            fix_options,
-            index=default_idx,
-            horizontal=True,
-            key=f"fix_type_{url}",
-            label_visibility='collapsed'
-        )
+        with cols[3]:
+            # Edit column
+            if is_editing:
+                if st.button("✕", key=f"close_{url}", help="Close"):
+                    st.session_state.editing_url = None
+                    st.rerun()
+            elif is_approved:
+                if st.button("📝", key=f"edit_{url}", help="Edit fix"):
+                    st.session_state.editing_url = url
+                    st.rerun()
+            else:
+                if st.button("📝", key=f"edit_{url}", help="Set fix"):
+                    st.session_state.editing_url = url
+                    st.rerun()
         
+        # Expanded edit section (if this row is being edited)
+        if is_editing:
+            render_inline_edit(url, info, decision, domain)
+
+
+def render_inline_edit(url: str, info: Dict, decision: Dict, domain: str):
+    """Render compact inline edit form"""
+    
+    with st.container():
         st.markdown("---")
         
-        # Show content based on selection
-        if selected_fix == "🗑️ Remove Link":
-            st.markdown("""
-            **What this does:**  
-            Removes the `<a>` hyperlink tag but **keeps the anchor text visible** on your page. 
-            
-            For example: `<a href="broken.com">Click here</a>` becomes just `Click here`
-            
-            ✅ **Use when:** The destination page no longer exists and there's no suitable replacement.
-            """)
-            
-            if st.button("💾 Save Selection", key=f"save_remove_{url}", type="primary", use_container_width=True):
-                st.session_state.decisions[url]['approved_action'] = 'remove'
-                st.session_state.decisions[url]['approved_fix'] = ''
-                st.session_state.editing_url = None  # Close the form
-                st.toast("✅ Saved: Remove Link", icon="✅")
-                time.sleep(0.3)
+        # Show context info
+        page_count = info['count']
+        status_code = info['status_code']
+        link_type = "Internal" if info['is_internal'] else "External"
+        st.markdown(f"<span style='color: #64748b; font-size: 0.85rem;'>📊 Affects **{page_count}** page(s) · Status: **{status_code}** · {link_type}</span>", unsafe_allow_html=True)
+        
+        st.markdown("")  # Small spacer
+        
+        # Quick action row
+        action_cols = st.columns([1, 1, 1, 1, 1])
+        
+        with action_cols[0]:
+            if st.button("🗑️ Remove", key=f"quick_remove_{url}", use_container_width=True, help="Remove the link, keep anchor text"):
+                decision['approved_action'] = 'remove'
+                decision['approved_fix'] = ''
+                st.session_state.editing_url = None
+                st.toast("✅ Set to Remove", icon="✅")
                 st.rerun()
         
-        elif selected_fix == "✏️ Use Manual":
-            st.markdown("""
-            **What this does:**  
-            Replaces the broken URL with a new URL you provide. The anchor text stays the same.
+        with action_cols[1]:
+            if st.button("⏭️ Ignore", key=f"quick_ignore_{url}", use_container_width=True, help="Skip this URL"):
+                decision['approved_action'] = 'ignore'
+                decision['approved_fix'] = ''
+                st.session_state.editing_url = None
+                st.toast("✅ Ignored", icon="✅")
+                st.rerun()
+        
+        with action_cols[2]:
+            # Single AI button
+            has_ai_key = bool(st.session_state.anthropic_key) or (AGENT_MODE_API_KEY and st.session_state.ai_suggestions_remaining > 0)
+            if has_ai_key:
+                if st.button("🤖 Get AI", key=f"quick_ai_{url}", use_container_width=True, help="Get AI suggestion"):
+                    api_key = st.session_state.anthropic_key or AGENT_MODE_API_KEY
+                    with st.spinner("AI analyzing..."):
+                        result = get_ai_suggestion(url, info, domain, api_key)
+                        decision['ai_action'] = result['action']
+                        decision['ai_suggestion'] = result['url'] or ''
+                        decision['ai_notes'] = result['notes']
+                        if not st.session_state.anthropic_key:
+                            st.session_state.ai_suggestions_remaining = max(0, st.session_state.ai_suggestions_remaining - 1)
+                    st.rerun()
+            else:
+                st.button("🤖 Get AI", key=f"quick_ai_{url}", use_container_width=True, disabled=True, help="Add API key first")
+        
+        with action_cols[3]:
+            pass  # Spacer
+        
+        with action_cols[4]:
+            if st.button("❌ Close", key=f"close_edit_{url}", use_container_width=True):
+                st.session_state.editing_url = None
+                st.rerun()
+        
+        # Show AI suggestion if available
+        if decision['ai_action']:
+            st.markdown("**AI Suggestion:**")
+            if decision['ai_action'] == 'remove':
+                st.info(f"🗑️ **Remove link** — {decision['ai_notes'][:100]}..." if len(decision.get('ai_notes', '')) > 100 else f"🗑️ **Remove link** — {decision.get('ai_notes', 'No suitable replacement found')}")
+            else:
+                st.success(f"🔗 **Replace with:** `{decision['ai_suggestion']}`")
+                if decision.get('ai_notes'):
+                    st.caption(decision['ai_notes'][:150] + "..." if len(decision['ai_notes']) > 150 else decision['ai_notes'])
             
-            ✅ **Use when:** You know the correct replacement URL (e.g., content moved to a new location).
-            """)
-            
-            manual_fix = st.text_input(
-                "Enter replacement URL:",
-                value=decision['manual_fix'],
-                placeholder="https://example.com/new-page",
-                key=f"manual_{url}"
+            if st.button("✅ Accept AI Suggestion", key=f"accept_ai_{url}", type="primary", use_container_width=True):
+                decision['approved_action'] = decision['ai_action']
+                decision['approved_fix'] = decision['ai_suggestion']
+                st.session_state.editing_url = None
+                st.toast("✅ Approved", icon="✅")
+                st.rerun()
+        
+        # Manual replacement input
+        st.markdown("**Or enter replacement URL:**")
+        manual_cols = st.columns([4, 1])
+        
+        # Get base URL from domain - only for internal links
+        is_internal = info.get('is_internal', True)
+        if is_internal and domain:
+            base_url = f"https://{domain}/"
+            placeholder = f"{base_url}new-page-path"
+        else:
+            base_url = ""
+            placeholder = "https://example.com/new-page"
+        
+        # Determine default value - use existing manual_fix, or base URL if empty
+        existing_value = decision.get('manual_fix', '')
+        default_value = existing_value if existing_value else base_url
+        
+        with manual_cols[0]:
+            manual_url = st.text_input(
+                "Replacement URL",
+                value=default_value,
+                placeholder=placeholder,
+                key=f"manual_input_{url}",
+                label_visibility="collapsed"
             )
-            
-            if manual_fix != decision['manual_fix']:
-                st.session_state.decisions[url]['manual_fix'] = manual_fix
-            
-            if manual_fix:
-                if st.button("💾 Save Selection", key=f"save_manual_{url}", type="primary", use_container_width=True):
-                    st.session_state.decisions[url]['approved_action'] = 'replace'
-                    st.session_state.decisions[url]['approved_fix'] = manual_fix
-                    st.session_state.editing_url = None  # Close the form
-                    st.toast("✅ Saved: Replace URL", icon="✅")
-                    time.sleep(0.3)
+        with manual_cols[1]:
+            # Check if URL has content
+            has_valid_url = manual_url and len(manual_url.strip()) > 10 and manual_url.startswith('http')
+            if st.button("✓ Save", key=f"save_manual_{url}", type="primary", use_container_width=True):
+                if has_valid_url:
+                    decision['approved_action'] = 'replace'
+                    decision['approved_fix'] = manual_url
+                    decision['manual_fix'] = manual_url
+                    st.session_state.editing_url = None
+                    st.toast("✅ Saved", icon="✅")
                     st.rerun()
-            else:
-                st.caption("⬆️ Enter a replacement URL above to save")
-        
-        elif selected_fix == "🤖 Use AI":
-            # Get mode and remaining suggestions
-            selected_mode = st.session_state.get('selected_mode', 'quick_start')
-            remaining = st.session_state.ai_suggestions_remaining
-            user_has_key = bool(st.session_state.anthropic_key)
-            
-            st.markdown("""
-            **What this does:**  
-            AI searches the web to find a suitable replacement URL or recommends removal if no replacement exists.
-            """)
-            
-            # Show free suggestions counter for Quick Start Mode
-            if selected_mode == 'quick_start' and AGENT_MODE_API_KEY:
-                if remaining > 0:
-                    st.markdown(f"🎁 **{remaining} of {AGENT_MODE_FREE_SUGGESTIONS} free AI suggestions available**")
-                elif not user_has_key:
-                    st.markdown("🎁 **0 of 5 free AI suggestions remaining**")
-            
-            st.markdown("✅ **Use when:** You want help finding where content may have moved.")
-            
-            # Show existing AI suggestion if available
-            if decision['ai_action']:
-                st.markdown("---")
-                st.markdown("**AI Recommendation:**")
-                if decision['ai_action'] == 'replace':
-                    st.success(f"Replace with: `{decision['ai_suggestion']}`")
                 else:
-                    st.info("🗑️ Remove this link (keep anchor text)")
-                
-                if decision['ai_notes']:
-                    st.markdown(f"**Why:** {decision['ai_notes']}")
-                
-                if st.button("💾 Accept AI Suggestion", key=f"save_ai_{url}", type="primary", use_container_width=True):
-                    st.session_state.decisions[url]['approved_action'] = decision['ai_action']
-                    st.session_state.decisions[url]['approved_fix'] = decision['ai_suggestion']
-                    st.session_state.editing_url = None  # Close the form
-                    action_label = "Replace URL" if decision['ai_action'] == 'replace' else "Remove Link"
-                    st.toast(f"✅ Saved: {action_label}", icon="✅")
-                    time.sleep(0.3)
-                    st.rerun()
-            else:
-                # No AI suggestion yet - show button based on mode
-                st.markdown("---")
-                
-                if selected_mode == 'quick_start':
-                    # Quick Start Mode - use free suggestions or user's key
-                    if remaining > 0 and AGENT_MODE_API_KEY:
-                        # Free suggestions available
-                        if st.button("🔍 Get AI Suggestion", key=f"ai_{url}", use_container_width=True):
-                            with st.spinner("AI is searching for alternatives..."):
-                                result = get_ai_suggestion(url, info, domain, AGENT_MODE_API_KEY)
-                                st.session_state.decisions[url]['ai_action'] = result['action']
-                                st.session_state.decisions[url]['ai_suggestion'] = result['url'] or ''
-                                st.session_state.decisions[url]['ai_notes'] = result['notes']
-                                st.session_state.ai_suggestions_remaining -= 1
-                                st.rerun()
-                    elif user_has_key:
-                        # User entered their own key
-                        st.success("✅ Using your API key — unlimited suggestions")
-                        if st.button("🔍 Get AI Suggestion", key=f"ai_{url}", use_container_width=True):
-                            with st.spinner("AI is searching for alternatives..."):
-                                result = get_ai_suggestion(url, info, domain, st.session_state.anthropic_key)
-                                st.session_state.decisions[url]['ai_action'] = result['action']
-                                st.session_state.decisions[url]['ai_suggestion'] = result['url'] or ''
-                                st.session_state.decisions[url]['ai_notes'] = result['notes']
-                                st.rerun()
-                    else:
-                        # Free suggestions exhausted, no user key
-                        st.markdown("""
-                        <div style="background: #fef3c7; padding: 1rem; border-radius: 8px; border: 1px solid #fcd34d; margin-bottom: 1rem;">
-                            <div style="font-weight: 600; color: #92400e; margin-bottom: 0.5rem;">🎁 You've used all 5 free AI suggestions!</div>
-                            <div style="color: #a16207; font-size: 0.9rem;">
-                                Enter your own Claude API key for unlimited suggestions, or continue with manual fixes.
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        api_key_input = st.text_input(
-                            "Your Claude API Key:",
-                            type="password",
-                            placeholder="sk-ant-...",
-                            key=f"api_key_{url}",
-                        )
-                        if api_key_input:
-                            st.session_state.anthropic_key = api_key_input
-                            st.success("✅ API key saved!")
-                            st.rerun()
-                        
-                        st.caption("Get your key at [console.anthropic.com](https://console.anthropic.com) • Keys are stored in your browser session only")
-                
-                else:
-                    # Full Mode - require user's key
-                    if user_has_key:
-                        if st.button("🔍 Get AI Suggestion", key=f"ai_{url}", use_container_width=True):
-                            with st.spinner("AI is searching for alternatives..."):
-                                result = get_ai_suggestion(url, info, domain, st.session_state.anthropic_key)
-                                st.session_state.decisions[url]['ai_action'] = result['action']
-                                st.session_state.decisions[url]['ai_suggestion'] = result['url'] or ''
-                                st.session_state.decisions[url]['ai_notes'] = result['notes']
-                                st.rerun()
-                    else:
-                        st.info("🔑 **Full Mode:** Enter your Claude API key for AI suggestions")
-                        
-                        api_key_input = st.text_input(
-                            "Your Claude API Key:",
-                            type="password",
-                            placeholder="sk-ant-...",
-                            key=f"api_key_{url}",
-                        )
-                        if api_key_input:
-                            st.session_state.anthropic_key = api_key_input
-                            st.success("✅ API key saved!")
-                            st.rerun()
-                        
-                        st.caption("Get your key at [console.anthropic.com](https://console.anthropic.com) • Keys are stored in your browser session only")
+                    st.toast("⚠️ Enter a full URL path", icon="⚠️")
         
-        elif selected_fix == "⏭️ Ignore":
-            st.markdown("""
-            **What this does:**  
-            Marks this URL as **reviewed but takes no action**. The link remains unchanged on your site.
-            
-            ✅ **Use when:** 
-            - It's a false positive (the link actually works)
-            - You'll handle it manually outside this tool
-            - You want to skip it for now but track that you've seen it
-            """)
-            
-            if st.button("💾 Save Selection", key=f"save_ignore_{url}", type="primary", use_container_width=True):
-                st.session_state.decisions[url]['approved_action'] = 'ignore'
-                st.session_state.decisions[url]['approved_fix'] = ''
-                st.session_state.editing_url = None  # Close the form
-                st.toast("✅ Saved: Ignored", icon="✅")
-                time.sleep(0.3)
-                st.rerun()
-        
-        # Clear/Reset option if already has an action
+        # Reset button if already approved
         if decision['approved_action']:
-            st.markdown("---")
-            if st.button("↩️ Clear Selection (Reset to Pending)", key=f"clear_{url}", use_container_width=True):
-                st.session_state.decisions[url]['approved_action'] = ''
-                st.session_state.decisions[url]['approved_fix'] = ''
-                st.session_state.editing_url = None  # Close the form
-                st.toast("↩️ Reset to Pending", icon="↩️")
-                time.sleep(0.3)
+            if st.button("↩️ Reset to Pending", key=f"reset_{url}"):
+                decision['approved_action'] = ''
+                decision['approved_fix'] = ''
                 st.rerun()
         
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("---")
 
 
 def render_wordpress_section():
@@ -2678,6 +3692,403 @@ def render_wordpress_section():
         """, unsafe_allow_html=True)
 
 
+def create_gsheets_report() -> bytes:
+    """Create a professional Excel report optimized for Google Sheets upload"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    from openpyxl.formatting.rule import FormulaRule
+    from io import BytesIO
+    
+    decisions = st.session_state.decisions
+    broken_urls = st.session_state.broken_urls
+    domain = st.session_state.domain or "Unknown"
+    
+    wb = Workbook()
+    
+    # =========================================================================
+    # TAB 1: SUMMARY (Executive Overview)
+    # =========================================================================
+    summary = wb.active
+    summary.title = "Summary"
+    
+    # Styling
+    header_fill = PatternFill(start_color="1a365d", end_color="1a365d", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF", size=12)
+    metric_font = Font(bold=True, size=24, color="1a365d")
+    label_font = Font(size=11, color="64748b")
+    section_font = Font(bold=True, size=14, color="1a365d")
+    
+    thin_border = Border(
+        left=Side(style='thin', color='e2e8f0'),
+        right=Side(style='thin', color='e2e8f0'),
+        top=Side(style='thin', color='e2e8f0'),
+        bottom=Side(style='thin', color='e2e8f0')
+    )
+    
+    # Title
+    summary['A1'] = "🔗 Broken Links Audit Report"
+    summary['A1'].font = Font(bold=True, size=20, color="1a365d")
+    summary.merge_cells('A1:F1')
+    
+    # Metadata
+    summary['A2'] = f"Site: {domain}"
+    summary['A2'].font = Font(size=11, color="64748b")
+    summary['D2'] = f"Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}"
+    summary['D2'].font = Font(size=11, color="64748b")
+    summary.merge_cells('A2:C2')
+    summary.merge_cells('D2:F2')
+    
+    # Calculate stats
+    total_broken = len(broken_urls)
+    total_fixed = sum(1 for d in decisions.values() if d['approved_action'] in ['remove', 'replace'])
+    total_ignored = sum(1 for d in decisions.values() if d['approved_action'] == 'ignore')
+    total_pending = sum(1 for d in decisions.values() if not d['approved_action'])
+    total_remove = sum(1 for d in decisions.values() if d['approved_action'] == 'remove')
+    total_replace = sum(1 for d in decisions.values() if d['approved_action'] == 'replace')
+    
+    total_pages_affected = sum(info['count'] for info in broken_urls.values())
+    internal_count = sum(1 for info in broken_urls.values() if info['is_internal'])
+    external_count = total_broken - internal_count
+    
+    # Key Metrics Section
+    summary['A4'] = "KEY METRICS"
+    summary['A4'].font = section_font
+    summary.merge_cells('A4:F4')
+    
+    # Metrics row
+    metrics = [
+        ("Total Broken", total_broken),
+        ("Fixed", total_fixed),
+        ("Ignored", total_ignored),
+        ("Pending", total_pending),
+        ("Pages Affected", total_pages_affected),
+    ]
+    
+    for i, (label, value) in enumerate(metrics):
+        col = get_column_letter(i + 1)
+        summary[f'{col}5'] = value
+        summary[f'{col}5'].font = metric_font
+        summary[f'{col}5'].alignment = Alignment(horizontal='center')
+        summary[f'{col}6'] = label
+        summary[f'{col}6'].font = label_font
+        summary[f'{col}6'].alignment = Alignment(horizontal='center')
+    
+    # Breakdown Section
+    summary['A8'] = "BREAKDOWN"
+    summary['A8'].font = section_font
+    
+    breakdown_data = [
+        ["Category", "Count", "Percentage"],
+        ["Internal Links", internal_count, f"{internal_count/total_broken*100:.1f}%" if total_broken > 0 else "0%"],
+        ["External Links", external_count, f"{external_count/total_broken*100:.1f}%" if total_broken > 0 else "0%"],
+        ["", "", ""],
+        ["Links Removed", total_remove, f"{total_remove/total_broken*100:.1f}%" if total_broken > 0 else "0%"],
+        ["Links Replaced", total_replace, f"{total_replace/total_broken*100:.1f}%" if total_broken > 0 else "0%"],
+        ["Ignored", total_ignored, f"{total_ignored/total_broken*100:.1f}%" if total_broken > 0 else "0%"],
+        ["Pending Review", total_pending, f"{total_pending/total_broken*100:.1f}%" if total_broken > 0 else "0%"],
+    ]
+    
+    for row_idx, row_data in enumerate(breakdown_data, start=9):
+        for col_idx, value in enumerate(row_data, start=1):
+            cell = summary.cell(row=row_idx, column=col_idx, value=value)
+            cell.border = thin_border
+            if row_idx == 9:  # Header row
+                cell.fill = PatternFill(start_color="f1f5f9", end_color="f1f5f9", fill_type="solid")
+                cell.font = Font(bold=True)
+    
+    # Status codes breakdown
+    status_counts = {}
+    for info in broken_urls.values():
+        code = info['status_code']
+        status_counts[code] = status_counts.get(code, 0) + 1
+    
+    summary['A19'] = "STATUS CODES"
+    summary['A19'].font = section_font
+    
+    status_row = 20
+    summary.cell(row=status_row, column=1, value="Status Code").font = Font(bold=True)
+    summary.cell(row=status_row, column=2, value="Count").font = Font(bold=True)
+    summary.cell(row=status_row, column=3, value="Meaning").font = Font(bold=True)
+    
+    status_meanings = {
+        400: "Bad Request",
+        401: "Unauthorized", 
+        403: "Forbidden",
+        404: "Not Found",
+        410: "Gone (Intentionally Removed)",
+        500: "Server Error",
+        502: "Bad Gateway",
+        503: "Service Unavailable"
+    }
+    
+    for i, (code, count) in enumerate(sorted(status_counts.items()), start=1):
+        row = status_row + i
+        summary.cell(row=row, column=1, value=code)
+        summary.cell(row=row, column=2, value=count)
+        summary.cell(row=row, column=3, value=status_meanings.get(code, "Other Error"))
+    
+    # Column widths
+    summary.column_dimensions['A'].width = 18
+    summary.column_dimensions['B'].width = 12
+    summary.column_dimensions['C'].width = 12
+    summary.column_dimensions['D'].width = 25
+    summary.column_dimensions['E'].width = 15
+    summary.column_dimensions['F'].width = 15
+    
+    # =========================================================================
+    # TAB 2: FIXES (Action Log)
+    # =========================================================================
+    fixes = wb.create_sheet("Fixes")
+    
+    # Header
+    fix_headers = ["Broken URL", "Status Code", "Type", "Action", "New URL", "Pages Affected", "Anchor Text", "AI Notes"]
+    for col, header in enumerate(fix_headers, start=1):
+        cell = fixes.cell(row=1, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+    
+    # Data rows
+    row = 2
+    for url, decision in decisions.items():
+        if not decision['approved_action']:
+            continue  # Skip pending
+            
+        info = broken_urls.get(url, {})
+        
+        # Determine action text
+        if decision['approved_action'] == 'remove':
+            action_text = "🗑️ Remove Link"
+            new_url = ""
+        elif decision['approved_action'] == 'replace':
+            action_text = "🔗 Replace"
+            new_url = decision['approved_fix']
+        elif decision['approved_action'] == 'ignore':
+            action_text = "⏭️ Ignored"
+            new_url = ""
+        else:
+            action_text = decision['approved_action']
+            new_url = decision['approved_fix']
+        
+        anchors = ", ".join(info.get('anchors', [])[:3])
+        if len(info.get('anchors', [])) > 3:
+            anchors += f" (+{len(info['anchors'])-3} more)"
+        
+        fixes.cell(row=row, column=1, value=url)
+        fixes.cell(row=row, column=2, value=info.get('status_code', ''))
+        fixes.cell(row=row, column=3, value="Internal" if info.get('is_internal') else "External")
+        fixes.cell(row=row, column=4, value=action_text)
+        fixes.cell(row=row, column=5, value=new_url)
+        fixes.cell(row=row, column=6, value=info.get('count', 0))
+        fixes.cell(row=row, column=7, value=anchors)
+        fixes.cell(row=row, column=8, value=decision.get('ai_notes', ''))
+        
+        # Color code rows
+        if decision['approved_action'] == 'remove':
+            fill = PatternFill(start_color="fef2f2", end_color="fef2f2", fill_type="solid")
+        elif decision['approved_action'] == 'replace':
+            fill = PatternFill(start_color="f0fdf4", end_color="f0fdf4", fill_type="solid")
+        else:
+            fill = PatternFill(start_color="f8fafc", end_color="f8fafc", fill_type="solid")
+        
+        for col in range(1, 9):
+            fixes.cell(row=row, column=col).fill = fill
+            fixes.cell(row=row, column=col).border = thin_border
+        
+        row += 1
+    
+    # Column widths
+    fixes.column_dimensions['A'].width = 50
+    fixes.column_dimensions['B'].width = 12
+    fixes.column_dimensions['C'].width = 10
+    fixes.column_dimensions['D'].width = 15
+    fixes.column_dimensions['E'].width = 50
+    fixes.column_dimensions['F'].width = 12
+    fixes.column_dimensions['G'].width = 30
+    fixes.column_dimensions['H'].width = 40
+    
+    # Freeze header row
+    fixes.freeze_panes = 'A2'
+    
+    # =========================================================================
+    # TAB 3: DETAILED LOG (Every source page)
+    # =========================================================================
+    details = wb.create_sheet("Detailed Log")
+    
+    # Header
+    detail_headers = ["Source Page", "Post ID", "Broken URL", "Anchor Text", "Action", "New URL", "Link Position"]
+    for col, header in enumerate(detail_headers, start=1):
+        cell = details.cell(row=1, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+    
+    # Data - one row per source page affected
+    row = 2
+    for url, decision in decisions.items():
+        if not decision['approved_action'] or decision['approved_action'] == 'ignore':
+            continue
+            
+        info = broken_urls.get(url, {})
+        
+        # Get action and new URL
+        if decision['approved_action'] == 'remove':
+            action_text = "Remove"
+            new_url = ""
+        else:
+            action_text = "Replace"
+            new_url = decision['approved_fix']
+        
+        # One row per source page
+        for source in info.get('sources', []):
+            post_id = st.session_state.post_id_cache.get(source, "")
+            anchor = info.get('anchors', [''])[0] if info.get('anchors') else ''
+            
+            details.cell(row=row, column=1, value=source)
+            details.cell(row=row, column=2, value=post_id)
+            details.cell(row=row, column=3, value=url)
+            details.cell(row=row, column=4, value=anchor)
+            details.cell(row=row, column=5, value=action_text)
+            details.cell(row=row, column=6, value=new_url)
+            details.cell(row=row, column=7, value=info.get('link_positions', ['Content'])[0] if info.get('link_positions') else 'Content')
+            
+            for col in range(1, 8):
+                details.cell(row=row, column=col).border = thin_border
+            
+            row += 1
+    
+    # Column widths
+    details.column_dimensions['A'].width = 50
+    details.column_dimensions['B'].width = 10
+    details.column_dimensions['C'].width = 50
+    details.column_dimensions['D'].width = 25
+    details.column_dimensions['E'].width = 12
+    details.column_dimensions['F'].width = 50
+    details.column_dimensions['G'].width = 15
+    
+    # Freeze header row
+    details.freeze_panes = 'A2'
+    
+    # =========================================================================
+    # TAB 4: PENDING (Still needs review)
+    # =========================================================================
+    pending = wb.create_sheet("Pending Review")
+    
+    # Header
+    pending_headers = ["Broken URL", "Status Code", "Type", "Pages Affected", "Anchor Text", "AI Suggestion"]
+    for col, header in enumerate(pending_headers, start=1):
+        cell = pending.cell(row=1, column=col, value=header)
+        cell.fill = PatternFill(start_color="fef3c7", end_color="fef3c7", fill_type="solid")
+        cell.font = Font(bold=True)
+    
+    # Data
+    row = 2
+    for url, decision in decisions.items():
+        if decision['approved_action']:
+            continue  # Skip approved
+            
+        info = broken_urls.get(url, {})
+        anchors = ", ".join(info.get('anchors', [])[:2])
+        
+        ai_suggestion = ""
+        if decision.get('ai_action'):
+            if decision['ai_action'] == 'remove':
+                ai_suggestion = "AI suggests: Remove"
+            else:
+                ai_suggestion = f"AI suggests: {decision.get('ai_suggestion', '')}"
+        
+        pending.cell(row=row, column=1, value=url)
+        pending.cell(row=row, column=2, value=info.get('status_code', ''))
+        pending.cell(row=row, column=3, value="Internal" if info.get('is_internal') else "External")
+        pending.cell(row=row, column=4, value=info.get('count', 0))
+        pending.cell(row=row, column=5, value=anchors)
+        pending.cell(row=row, column=6, value=ai_suggestion)
+        
+        for col in range(1, 7):
+            pending.cell(row=row, column=col).border = thin_border
+        
+        row += 1
+    
+    # Column widths
+    pending.column_dimensions['A'].width = 50
+    pending.column_dimensions['B'].width = 12
+    pending.column_dimensions['C'].width = 10
+    pending.column_dimensions['D'].width = 12
+    pending.column_dimensions['E'].width = 30
+    pending.column_dimensions['F'].width = 40
+    
+    pending.freeze_panes = 'A2'
+    
+    # Save to BytesIO
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output.getvalue()
+
+
+def render_gsheets_export_modal():
+    """Render Google Sheets export modal"""
+    st.markdown("---")
+    st.markdown("### 📊 Export for Google Sheets")
+    
+    st.markdown("""
+    Generate a **professional SEO audit report** in Excel format, optimized for Google Sheets upload.
+    
+    **Your report includes:**
+    - 📈 **Summary** — Executive overview with key metrics and charts
+    - ✅ **Fixes** — All approved actions (remove/replace) with details  
+    - 📋 **Detailed Log** — Every affected page with Post IDs
+    - ⏳ **Pending Review** — URLs still needing attention
+    """)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("📥 Generate Report", type="primary", use_container_width=True):
+            with st.spinner("Creating your report..."):
+                try:
+                    xlsx_data = create_gsheets_report()
+                    
+                    # Track export
+                    track_event("export", {
+                        "format": "xlsx_gsheets",
+                        "total_urls": len(st.session_state.broken_urls)
+                    })
+                    
+                    st.session_state.gsheets_export_data = xlsx_data
+                    st.success("✅ Report ready!")
+                except Exception as e:
+                    st.error(f"Error creating report: {str(e)}")
+    
+    with col2:
+        if st.button("❌ Cancel", use_container_width=True):
+            st.session_state.show_gsheets_export = False
+            st.rerun()
+    
+    # Show download button if report is ready
+    if st.session_state.get('gsheets_export_data'):
+        domain = st.session_state.domain or "site"
+        filename = f"broken_links_audit_{domain}_{datetime.now().strftime('%Y%m%d')}.xlsx"
+        
+        st.download_button(
+            "⬇️ Download Excel Report",
+            data=st.session_state.gsheets_export_data,
+            file_name=filename,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+        
+        st.markdown("""
+        **Next steps:**
+        1. Download the report above
+        2. Go to [Google Drive](https://drive.google.com)
+        3. Click **New → File upload** and select the Excel file
+        4. Right-click the file → **Open with → Google Sheets**
+        
+        💡 **Tip:** Share the Google Sheet link with your team or clients for collaboration!
+        """)
+
+
 def render_export_section():
     """Render export section"""
     decisions = st.session_state.decisions
@@ -2694,10 +4105,14 @@ def render_export_section():
     else:
         st.markdown("No fixes approved yet. Approve fixes above to enable export.")
     
-    # Export buttons
-    col1, col2 = st.columns(2)
+    # Export buttons - 3 columns now
+    col1, col2, col3 = st.columns(3)
     
     with col1:
+        if st.button("📊 Export for Google Sheets", use_container_width=True, disabled=not has_approved, type="primary"):
+            st.session_state.show_gsheets_export = True
+    
+    with col2:
         if st.button("📥 Export CSV", use_container_width=True, disabled=not has_approved):
             export_data = create_export_data()
             
@@ -2720,7 +4135,7 @@ def render_export_section():
                 use_container_width=True
             )
     
-    with col2:
+    with col3:
         if st.button("📥 Export JSON", use_container_width=True, disabled=not has_approved):
             export_data = create_export_data()
             
@@ -2742,6 +4157,10 @@ def render_export_section():
                 mime="application/json",
                 use_container_width=True
             )
+    
+    # Google Sheets Export Modal
+    if st.session_state.get('show_gsheets_export'):
+        render_gsheets_export_modal()
     
     # WordPress apply section - only show after connected
     if not st.session_state.wp_connected:
@@ -3524,18 +4943,62 @@ def render_rc_spreadsheet():
     
     # Count pending URLs for bulk actions
     pending_keys = [k for k, d in decisions.items() if not d['approved_action']]
+    pending_301 = [k for k in pending_keys if not redirects[k]['is_temp_redirect']]
+    pending_302 = [k for k in pending_keys if redirects[k]['is_temp_redirect']]
+    approved_count = sum(1 for d in decisions.values() if d['approved_action'])
     
-    # Bulk actions
-    if pending_keys:
-        with st.expander(f"⚡ Bulk Actions ({len(pending_keys)} pending)", expanded=False):
-            st.markdown("Redirect chains are safe to bulk approve since the replacement URLs are already verified by Screaming Frog:")
-            
-            if st.button(f"✅ Approve All Pending ({len(pending_keys)})", use_container_width=True, type="primary"):
+    # Action bar (like Broken Links)
+    st.markdown("---")
+    action_cols = st.columns([2, 2, 2])
+    
+    with action_cols[0]:
+        if len(pending_keys) > 0:
+            if st.button(f"✅ Approve All ({len(pending_keys)})", type="primary", use_container_width=True):
+                # Show warning if there are 302s
+                if pending_302:
+                    st.session_state.rc_show_approve_warning = True
+                    st.rerun()
+                else:
+                    # No 302s, approve directly
+                    for key in pending_keys:
+                        st.session_state.rc_decisions[key]['approved_action'] = 'replace'
+                        st.session_state.rc_decisions[key]['approved_fix'] = redirects[key]['final_address']
+                    st.toast(f"✅ Approved {len(pending_keys)} redirects", icon="✅")
+                    st.rerun()
+        else:
+            st.button("✅ Approve All", use_container_width=True, disabled=True)
+    
+    with action_cols[1]:
+        # Placeholder for future bulk action
+        pass
+    
+    with action_cols[2]:
+        if st.button(f"📥 Export ({approved_count})", use_container_width=True, disabled=approved_count == 0):
+            st.session_state.rc_scroll_to_export = True
+    
+    # Warning modal for 302s
+    if st.session_state.get('rc_show_approve_warning'):
+        st.warning(f"""
+        ⚠️ **{len(pending_302)} temporary (302) redirects detected**
+        
+        302 redirects may revert to original URLs. Are you sure you want to approve all {len(pending_keys)} redirects?
+        
+        - **{len(pending_301)}** permanent (301) redirects
+        - **{len(pending_302)}** temporary (302) redirects
+        """)
+        
+        warn_cols = st.columns([1, 1, 2])
+        with warn_cols[0]:
+            if st.button("✅ Yes, Approve All", type="primary", use_container_width=True):
                 for key in pending_keys:
                     st.session_state.rc_decisions[key]['approved_action'] = 'replace'
                     st.session_state.rc_decisions[key]['approved_fix'] = redirects[key]['final_address']
+                st.session_state.rc_show_approve_warning = False
                 st.toast(f"✅ Approved {len(pending_keys)} redirects", icon="✅")
-                time.sleep(0.5)
+                st.rerun()
+        with warn_cols[1]:
+            if st.button("❌ Cancel", use_container_width=True):
+                st.session_state.rc_show_approve_warning = False
                 st.rerun()
     
     # Apply filters
@@ -3575,6 +5038,15 @@ def render_rc_spreadsheet():
     
     st.markdown(f"**Showing {start+1}-{end} of {total} redirect chains**")
     
+    # Column headers - matching Broken Links style
+    st.markdown("""
+    <div style="display: flex; background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%); border: 1px solid #99f6e4; border-radius: 8px; padding: 0.5rem 0.75rem; margin: 0.5rem 0;">
+        <div style="flex: 8; font-size: 0.75rem; color: #0d9488; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Redirect (From → To)</div>
+        <div style="flex: 1; font-size: 0.75rem; color: #0d9488; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; text-align: center;">Approve</div>
+        <div style="flex: 0.8; font-size: 0.75rem; color: #0d9488; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; text-align: center;">Edit</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
     # Render each redirect
     for key in page_keys:
         render_rc_row(key, redirects[key], decisions[key])
@@ -3595,109 +5067,121 @@ def render_rc_spreadsheet():
 
 
 def render_rc_row(key: str, info: Dict, decision: Dict):
-    """Render a single redirect chain row"""
+    """Render a single redirect chain row - stacked layout with full URLs"""
+    import html
     
-    # Type badge
-    if info['is_temp_redirect']:
-        type_badge = '<span class="status-badge" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); color: #b45309;">302 Temp ⚠️</span>'
-    else:
-        type_badge = '<span class="status-badge" style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); color: #059669;">301 Perm</span>'
-    
-    # Internal/External badge
-    int_ext_badge = '<span class="status-badge status-internal">Internal</span>' if info['is_internal'] else '<span class="status-badge status-external">External</span>'
-    
-    # Approval status badge
-    if decision['approved_action']:
-        status_badge = '<span class="approved-badge">✓ Approved</span>'
-    else:
-        status_badge = '<span class="pending-badge">⏳ Pending</span>'
-    
-    # Shorten URLs for display
-    old_url_short = info['address'][:50] + '...' if len(info['address']) > 50 else info['address']
-    new_url_short = info['final_address'][:50] + '...' if len(info['final_address']) > 50 else info['final_address']
-    
-    st.markdown(f"""
-    <div class="url-row">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
-            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                {type_badge}
-                {int_ext_badge}
-                {status_badge}
-            </div>
-            <div style="color: #64748b; font-size: 0.8rem;">Affects {info['count']} page(s)</div>
-        </div>
-        <div style="font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.8rem; color: #dc2626; word-break: break-all;">
-            ✗ {old_url_short}
-        </div>
-        <div style="font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.8rem; color: #059669; word-break: break-all; margin-top: 0.25rem;">
-            → {new_url_short}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Action area
     is_editing = st.session_state.rc_editing_url == key
+    is_approved = bool(decision['approved_action'])
     
-    col1, col2 = st.columns([1, 5])
-    with col1:
-        if is_editing:
-            if st.button("❌ Close", key=f"rc_close_{key}", use_container_width=True):
-                st.session_state.rc_editing_url = None
-                st.rerun()
-        else:
-            if st.button("📝 Review", key=f"rc_edit_{key}", use_container_width=True):
-                st.session_state.rc_editing_url = key
-                st.rerun()
+    # Full URLs for display (strip protocol for cleaner look)
+    old_url_display = info['address'].replace('https://', '').replace('http://', '').replace('www.', '')
+    new_url_display = info['final_address'].replace('https://', '').replace('http://', '').replace('www.', '')
     
-    # Show inline edit form if this redirect is being edited
-    if is_editing:
-        st.markdown("""
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-top: 0.5rem;">
-        """, unsafe_allow_html=True)
+    old_url_escaped = html.escape(info['address'])
+    new_url_escaped = html.escape(info['final_address'])
+    old_url_display_escaped = html.escape(old_url_display)
+    new_url_display_escaped = html.escape(new_url_display)
+    
+    # Type badge HTML (301/302)
+    badge_color = "#fef3c7" if info['is_temp_redirect'] else "#d1fae5"
+    badge_text_color = "#b45309" if info['is_temp_redirect'] else "#059669"
+    badge_text = "302" if info['is_temp_redirect'] else "301"
+    type_badge = f"<span style='background: {badge_color}; color: {badge_text_color}; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem;'>{badge_text}</span>"
+    
+    # Page count
+    page_info = f"<span style='color: #94a3b8; font-size: 0.75rem; margin-left: 0.5rem;'>({info['count']} pages)</span>"
+    
+    # Build stacked row with APPROVE column
+    with st.container():
+        cols = st.columns([8, 1, 0.8])
         
-        st.markdown("**Redirect Details:**")
+        with cols[0]:
+            # Stacked URLs with badge inline on FROM line
+            if is_approved:
+                st.markdown(f"""
+                <div style="margin-bottom: 0.25rem;">
+                    <span style="color: #64748b; font-size: 0.75rem; margin-right: 0.5rem;">FROM:</span>
+                    <a href='{old_url_escaped}' target='_blank' style='color: #dc2626; text-decoration: line-through; font-size: 0.85rem; word-break: break-all;' title='Click to open'>{old_url_display_escaped}</a>
+                    {type_badge}
+                </div>
+                <div>
+                    <span style="color: #64748b; font-size: 0.75rem; margin-right: 0.5rem;">TO:</span>
+                    <a href='{new_url_escaped}' target='_blank' style='color: #059669; text-decoration: none; font-size: 0.85rem; word-break: break-all;' title='Click to open'>{new_url_display_escaped}</a>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div style="margin-bottom: 0.25rem;">
+                    <span style="color: #64748b; font-size: 0.75rem; margin-right: 0.5rem;">FROM:</span>
+                    <a href='{old_url_escaped}' target='_blank' style='color: #dc2626; text-decoration: none; font-size: 0.85rem; word-break: break-all;' title='Click to open'>{old_url_display_escaped}</a>
+                    {type_badge}{page_info}
+                </div>
+                <div>
+                    <span style="color: #64748b; font-size: 0.75rem; margin-right: 0.5rem;">TO:</span>
+                    <a href='{new_url_escaped}' target='_blank' style='color: #059669; text-decoration: none; font-size: 0.85rem; word-break: break-all;' title='Click to open'>{new_url_display_escaped}</a>
+                </div>
+                """, unsafe_allow_html=True)
         
-        # Show full URLs
-        st.markdown(f"**Current URL (will be replaced):**")
-        st.code(info['address'], language=None)
-        
-        st.markdown(f"**Final URL (replacement):**")
-        st.code(info['final_address'], language=None)
-        
-        if info['is_temp_redirect']:
-            st.warning("⚠️ This is a **302 Temporary** redirect. The destination may revert. Update if you're confident it's stable.")
-        
-        # Show affected pages
-        with st.expander(f"📄 Affected pages ({len(info['sources'])})", expanded=False):
-            for source in info['sources'][:10]:
-                st.markdown(f"- `{source[:60]}{'...' if len(source) > 60 else ''}`")
-            if len(info['sources']) > 10:
-                st.info(f"...and {len(info['sources']) - 10} more pages")
-        
-        st.markdown("---")
-        
-        # Action buttons
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("✅ Approve Fix", key=f"rc_approve_{key}", type="primary", use_container_width=True):
-                st.session_state.rc_decisions[key]['approved_action'] = 'replace'
-                st.session_state.rc_decisions[key]['approved_fix'] = info['final_address']
-                st.session_state.rc_editing_url = None
-                st.toast("✅ Redirect approved!", icon="✅")
-                time.sleep(0.3)
-                st.rerun()
-        
-        with col2:
-            if decision['approved_action']:
-                if st.button("↩️ Reset", key=f"rc_reset_{key}", use_container_width=True):
-                    st.session_state.rc_decisions[key]['approved_action'] = ''
-                    st.session_state.rc_decisions[key]['approved_fix'] = ''
-                    st.session_state.rc_editing_url = None
-                    st.toast("↩️ Reset to pending", icon="↩️")
-                    time.sleep(0.3)
+        with cols[1]:
+            # APPROVE column - checkbox style (like Broken Links)
+            if is_approved:
+                st.markdown("<span style='color: #22c55e; font-size: 1.2rem;'>✓</span>", unsafe_allow_html=True)
+            else:
+                # Clickable checkbox to approve directly
+                if st.button("☐", key=f"rc_quick_approve_{key}", help="Approve redirect"):
+                    st.session_state.rc_decisions[key]['approved_action'] = 'replace'
+                    st.session_state.rc_decisions[key]['approved_fix'] = info['final_address']
+                    st.toast("✅ Approved!", icon="✅")
                     st.rerun()
         
-        st.markdown("</div>", unsafe_allow_html=True)
+        with cols[2]:
+            # Edit button
+            if is_editing:
+                if st.button("✕", key=f"rc_close_{key}", help="Close"):
+                    st.session_state.rc_editing_url = None
+                    st.rerun()
+            else:
+                if st.button("📝", key=f"rc_edit_{key}", help="Review details"):
+                    st.session_state.rc_editing_url = key
+                    st.rerun()
+        
+        # Compact inline edit section
+        if is_editing:
+            st.markdown("---")
+            
+            # Show warning for temp redirects
+            if info['is_temp_redirect']:
+                st.warning("⚠️ **302 Temporary** redirect - destination may revert. Only approve if confident it's stable.")
+            
+            # Affected pages in compact expander
+            with st.expander(f"📄 {len(info['sources'])} affected pages", expanded=False):
+                for source in info['sources'][:10]:
+                    short_source = source.replace('https://', '').replace('http://', '')[:70]
+                    st.markdown(f"- `{short_source}`")
+                if len(info['sources']) > 10:
+                    st.caption(f"...and {len(info['sources']) - 10} more")
+            
+            # Action buttons - compact row
+            btn_cols = st.columns([1, 1, 2])
+            with btn_cols[0]:
+                if not is_approved:
+                    if st.button("✅ Approve", key=f"rc_approve_{key}", type="primary", use_container_width=True):
+                        st.session_state.rc_decisions[key]['approved_action'] = 'replace'
+                        st.session_state.rc_decisions[key]['approved_fix'] = info['final_address']
+                        st.session_state.rc_editing_url = None
+                        st.toast("✅ Approved!", icon="✅")
+                        st.rerun()
+            
+            with btn_cols[1]:
+                if is_approved:
+                    if st.button("↩️ Reset", key=f"rc_reset_{key}", use_container_width=True):
+                        st.session_state.rc_decisions[key]['approved_action'] = ''
+                        st.session_state.rc_decisions[key]['approved_fix'] = ''
+                        st.session_state.rc_editing_url = None
+                        st.toast("↩️ Reset", icon="↩️")
+                        st.rerun()
+            
+            st.markdown("---")
 
 
 def render_rc_export_section():
@@ -4041,109 +5525,93 @@ def render_iat_spreadsheet():
 
 
 def render_iat_row(img_url: str, info: Dict, decision: Dict, is_first_row: bool = False):
-    """Render a single image alt text row"""
+    """Render a single image alt text row - simplified view"""
+    import html
+    from urllib.parse import unquote
     
-    # Status badge
-    alt_status = info['alt_status']
-    if alt_status == 'missing':
-        status_badge = '<span style="background: #fecaca; color: #991b1b; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">Missing</span>'
-    elif alt_status == 'filename':
-        status_badge = '<span style="background: #fef3c7; color: #92400e; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">Filename</span>'
-    else:
-        status_badge = '<span style="background: #e0e7ff; color: #3730a3; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">Too Short</span>'
-    
-    # Approval status badge
+    # Approval status
     if decision['approved_action'] == 'ignore':
-        approval_badge = '<span class="ignored-badge">⏭️ Ignored</span>'
+        status_text = "⏭️ Ignored"
+        status_color = "#64748b"
     elif decision['approved_action'] == 'replace':
-        approval_badge = '<span class="approved-badge">✓ Replace Alt Text</span>'
+        status_text = "✅ Fixed"
+        status_color = "#059669"
     else:
-        approval_badge = '<span class="pending-badge">⏳ Pending</span>'
+        status_text = "⏳ Pending"
+        status_color = "#b45309"
     
-    # Current alt text preview
-    current_alt = info['current_alt'] if info['current_alt'] else '(empty)'
-    current_alt_display = current_alt[:40] + '...' if len(current_alt) > 40 else current_alt
+    # Image filename - decode and escape
+    img_url_decoded = unquote(img_url)
+    img_filename = img_url_decoded.split('/')[-1][:50]
+    img_filename_escaped = html.escape(img_filename)
+    img_url_escaped = html.escape(img_url)
     
-    # Image URL - show just filename
-    img_filename = img_url.split('/')[-1][:50]
+    # Simple row with thumbnail, filename, status, page count
+    col1, col2, col3, col4 = st.columns([1, 3, 1, 1])
     
-    st.markdown(f"""
-    <div class="url-row">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
-            <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-                <span style="font-size: 0.8rem; color: #64748b;">Alt Status:</span>
-                {status_badge}
-                <span style="font-size: 0.8rem; color: #64748b;">Action:</span>
-                {approval_badge}
-            </div>
-            <div style="color: #64748b; font-size: 0.8rem;">Affects {info['count']} page(s)</div>
-        </div>
-        <div style="font-family: monospace; font-size: 0.85rem; color: #134e4a; word-break: break-all;">{img_filename}</div>
-        <div style="font-size: 0.8rem; color: #64748b; margin-top: 0.25rem;">Current: <code>{current_alt_display}</code></div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Show first-row hint if applicable
-    if is_first_row and st.session_state.iat_editing_url is None:
-        st.markdown("""
-        <div style="color: #0d9488; font-size: 0.9rem; font-weight: 500; margin-bottom: 0.25rem;">
-            👇 Start here — click to set alt text for this image
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Action area
-    is_editing = st.session_state.iat_editing_url == img_url
-    
-    col1, col2 = st.columns([1, 5])
     with col1:
+        # Thumbnail
+        try:
+            st.image(img_url, width=60)
+        except:
+            st.caption("No preview")
+    
+    with col2:
+        st.markdown(f"**{img_filename_escaped}**")
+        st.caption(f"Affects {info['count']} page(s)")
+    
+    with col3:
+        st.markdown(f"<span style='color: {status_color}; font-weight: 500;'>{status_text}</span>", unsafe_allow_html=True)
+    
+    with col4:
+        is_editing = st.session_state.iat_editing_url == img_url
         if is_editing:
-            if st.button("❌ Close", key=f"iat_close_{img_url}", use_container_width=True):
+            if st.button("✕ Close", key=f"iat_close_{img_url}", use_container_width=True):
                 st.session_state.iat_editing_url = None
                 st.rerun()
         else:
-            if st.button("📝 Set Fix", key=f"iat_edit_{img_url}", use_container_width=True):
+            if st.button("Set Fix", key=f"iat_edit_{img_url}", type="primary", use_container_width=True):
                 st.session_state.iat_editing_url = img_url
                 st.rerun()
     
     # Show inline edit form if this image is being edited
-    if is_editing:
+    if st.session_state.iat_editing_url == img_url:
         render_iat_edit_form(img_url, info, decision)
 
 
 def render_iat_edit_form(img_url: str, info: Dict, decision: Dict):
     """Render the inline edit form for image alt text"""
-    st.markdown("""
-    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-top: 0.5rem;">
-    """, unsafe_allow_html=True)
     
-    # Show image thumbnail
-    st.markdown("**Image Preview:**")
-    try:
-        st.image(img_url, width=300)
-    except:
-        st.caption("(Could not load image preview)")
-    
-    st.markdown("**Choose a fix for this image:**")
-    
-    # Fix options
-    fix_options = ["✏️ Use Manual", "🤖 Use AI", "⏭️ Ignore"]
-    
-    # Determine default selection
-    if decision['approved_action'] == 'replace':
-        default_idx = 0
-    elif decision['approved_action'] == 'ignore':
-        default_idx = 2
-    else:
-        default_idx = 0
-    
-    selected_fix = st.radio(
-        "Fix type",
-        fix_options,
-        index=default_idx,
-        horizontal=True,
-        key=f"iat_fix_type_{img_url}",
-        label_visibility='collapsed'
-    )
+    # Use a Streamlit container with custom styling via CSS class
+    with st.container():
+        # Show image thumbnail
+        st.markdown("**Image Preview:**")
+        try:
+            st.image(img_url, width=300)
+        except:
+            st.caption("(Could not load image preview)")
+        
+        st.markdown("**Choose a fix for this image:**")
+        
+        # Fix options
+        fix_options = ["✏️ Use Manual", "🤖 Use AI", "⏭️ Ignore"]
+        
+        # Determine default selection
+        if decision['approved_action'] == 'replace':
+            default_idx = 0
+        elif decision['approved_action'] == 'ignore':
+            default_idx = 2
+        else:
+            default_idx = 0
+        
+        selected_fix = st.radio(
+            "Fix type",
+            fix_options,
+            index=default_idx,
+            horizontal=True,
+            key=f"iat_fix_type_{img_url}",
+            label_visibility='collapsed'
+        )
     
     # Reduced spacing divider (half the height of st.markdown("---"))
     st.markdown("<div style='border-top: 1px solid #e2e8f0; margin: 0.5rem 0;'></div>", unsafe_allow_html=True)
@@ -4252,8 +5720,6 @@ def render_iat_edit_form(img_url: str, info: Dict, decision: Dict):
             st.toast("✅ Saved: Ignored", icon="✅")
             time.sleep(0.3)
             st.rerun()
-    
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def create_iat_export_data() -> List[Dict]:
@@ -4729,10 +6195,16 @@ def main():
     init_session_state()
     render_nav()
     render_header()
-    render_progress_indicator()
+    render_feature_cards()
     
-    # Always show upload section at the top
+    # Show integrations panel if requested or not all connected
+    if st.session_state.show_integrations:
+        render_integrations_panel()
+    
+    # Always show upload section
     render_upload_section()
+    
+    render_progress_indicator()
     
     # Check state AFTER upload section (in case new file was just processed)
     has_broken_links = st.session_state.df is not None
@@ -4746,9 +6218,6 @@ def main():
         
         # Show task switcher if multiple tasks
         render_task_switcher()
-        
-        # Mode status banner - shows Quick Start Mode / Full Mode status
-        render_mode_selector()
         
         # Render based on current task type
         current_task = st.session_state.current_task
