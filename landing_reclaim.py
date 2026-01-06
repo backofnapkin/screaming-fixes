@@ -460,6 +460,10 @@ def render_landing_page():
     supabase = SupabaseClient()
     dataforseo = DataForSEOClient()
 
+    # Debug: show if API credentials are loaded (remove after debugging)
+    if dataforseo.use_mock:
+        st.warning(f"DEBUG: Using mock data. Login loaded: {bool(dataforseo.login)}, Password loaded: {bool(dataforseo.password)}")
+
     # Session state initialization
     if "scan_results" not in st.session_state:
         st.session_state.scan_results = None
