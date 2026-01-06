@@ -6,23 +6,45 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load .env from the same directory as this config file
+# Load .env from the same directory as this config file (for local dev)
 env_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=env_path)
+
+
+def get_secret(key: str, default: str = "") -> str:
+    """
+    Get a secret from Streamlit secrets (cloud) or environment variables (local).
+    Streamlit Cloud uses st.secrets, local dev uses .env
+    """
+    # First try environment variables (works for local .env)
+    value = os.environ.get(key, "")
+    if value:
+        return value
+
+    # Then try Streamlit secrets (for Streamlit Cloud)
+    try:
+        import streamlit as st
+        if hasattr(st, 'secrets') and key in st.secrets:
+            return st.secrets[key]
+    except Exception:
+        pass
+
+    return default
+
 
 # =============================================================================
 # SUPABASE CONFIGURATION
 # =============================================================================
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://yybfjsjysfteqjvicuuy.supabase.co")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+SUPABASE_URL = get_secret("SUPABASE_URL", "https://yybfjsjysfteqjvicuuy.supabase.co")
+SUPABASE_KEY = get_secret("SUPABASE_KEY", "")
 
 # =============================================================================
 # DATAFORSEO CONFIGURATION
 # =============================================================================
 
-DATAFORSEO_LOGIN = os.environ.get("DATAFORSEO_LOGIN", "")
-DATAFORSEO_PASSWORD = os.environ.get("DATAFORSEO_PASSWORD", "")
+DATAFORSEO_LOGIN = get_secret("DATAFORSEO_LOGIN", "")
+DATAFORSEO_PASSWORD = get_secret("DATAFORSEO_PASSWORD", "")
 
 # Use mock data if DataForSEO credentials are not configured
 USE_MOCK_DATA = not (DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD)
