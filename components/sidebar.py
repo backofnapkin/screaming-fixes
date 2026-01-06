@@ -3,7 +3,7 @@ Sidebar/Integrations Panel Components for Screaming Fixes.
 Handles the integrations setup panel with progressive steps.
 """
 
-from typing import Dict, Callable
+from typing import Dict, Callable, Optional, Any
 
 import streamlit as st
 
@@ -13,6 +13,161 @@ try:
     WP_AVAILABLE = True
 except ImportError:
     WP_AVAILABLE = False
+
+# Optional SEO service import
+try:
+    from services.wordpress import SEOService, PluginDetector
+    SEO_SERVICE_AVAILABLE = True
+except ImportError:
+    SEO_SERVICE_AVAILABLE = False
+
+
+def run_plugin_detection() -> Optional[Dict[str, Any]]:
+    """
+    Run SEO plugin detection on the connected WordPress site.
+
+    Returns:
+        Detection summary dict or None if detection fails
+    """
+    if not SEO_SERVICE_AVAILABLE:
+        return None
+
+    if not st.session_state.get('wp_connected') or not st.session_state.get('wp_client'):
+        return None
+
+    try:
+        # Check if we've already detected plugins for this session
+        if 'seo_detection_summary' in st.session_state:
+            return st.session_state.seo_detection_summary
+
+        # Run detection
+        seo_service = SEOService(st.session_state.wp_client)
+        summary = seo_service.get_summary()
+
+        # Cache the results and service
+        st.session_state.seo_detection_summary = summary
+        st.session_state.seo_service = seo_service
+
+        return summary
+    except Exception as e:
+        # Silent fail - don't break the UI
+        return None
+
+
+def render_detected_plugins():
+    """
+    Render the detected SEO plugins section.
+
+    Shows which plugins were found and what capabilities are available.
+    """
+    if not st.session_state.get('wp_connected'):
+        return
+
+    summary = run_plugin_detection()
+
+    if not summary:
+        return
+
+    plugins = summary.get('plugins', [])
+    capabilities = summary.get('capabilities', {})
+
+    if not plugins:
+        # No SEO plugins detected - show recommendation
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 1px solid #fcd34d; border-radius: 8px; padding: 0.75rem 1rem; margin-top: 0.5rem; margin-bottom: 0.5rem;">
+            <div style="font-size: 0.9rem; color: #92400e; font-weight: 500;">
+                ⚠️ No SEO plugins detected
+            </div>
+            <div style="font-size: 0.8rem; color: #a16207; margin-top: 0.25rem;">
+                Install <strong>Rank Math</strong> or <strong>Redirection</strong> to enable automatic redirect creation for broken links.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        return
+
+    # Show detected plugins
+    st.markdown("""
+    <div style="font-size: 0.85rem; font-weight: 600; color: #134e4a; margin-top: 0.75rem; margin-bottom: 0.5rem;">
+        Detected SEO Plugins:
+    </div>
+    """, unsafe_allow_html=True)
+
+    for plugin in plugins:
+        name = plugin.get('name', 'Unknown')
+        is_premium = plugin.get('is_premium', False)
+        can_redirects = plugin.get('can_redirects', False)
+        can_meta = plugin.get('can_meta', False)
+
+        premium_badge = '<span style="background: #dbeafe; color: #1d4ed8; padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.65rem; margin-left: 0.35rem;">PRO</span>' if is_premium else ''
+
+        features = []
+        if can_redirects:
+            features.append("🔀 Redirects")
+        if can_meta:
+            features.append("🏷️ Meta Tags")
+
+        features_text = " • ".join(features) if features else "Detection only"
+
+        st.markdown(f"""
+        <div style="background: #f0fdfa; border: 1px solid #a7f3d0; border-radius: 6px; padding: 0.5rem 0.75rem; margin-bottom: 0.35rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.85rem; font-weight: 500; color: #065f46;">
+                    ✅ {name}{premium_badge}
+                </span>
+            </div>
+            <div style="font-size: 0.75rem; color: #047857; margin-top: 0.2rem;">
+                {features_text}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Show capability summary
+    redirects_available = capabilities.get('redirects', False)
+    redirects_handler = capabilities.get('redirects_handler')
+    meta_available = capabilities.get('meta_tags', False)
+    meta_handler = capabilities.get('meta_handler')
+
+    st.markdown("""
+    <div style="font-size: 0.85rem; font-weight: 600; color: #134e4a; margin-top: 0.75rem; margin-bottom: 0.35rem;">
+        Available Features:
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Redirects capability
+    if redirects_available:
+        st.markdown(f"""
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+            <span style="color: #059669;">✅</span>
+            <span style="font-size: 0.8rem; color: #065f46;">Redirects</span>
+            <span style="font-size: 0.7rem; color: #64748b;">via {redirects_handler}</span>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+            <span style="color: #dc2626;">❌</span>
+            <span style="font-size: 0.8rem; color: #64748b;">Redirects</span>
+            <span style="font-size: 0.7rem; color: #94a3b8;">Install Rank Math or Redirection</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Meta tags capability
+    if meta_available:
+        st.markdown(f"""
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+            <span style="color: #059669;">✅</span>
+            <span style="font-size: 0.8rem; color: #065f46;">Meta Tags</span>
+            <span style="font-size: 0.7rem; color: #64748b;">via {meta_handler}</span>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+            <span style="color: #dc2626;">❌</span>
+            <span style="font-size: 0.8rem; color: #64748b;">Meta Tags</span>
+            <span style="font-size: 0.7rem; color: #94a3b8;">Install Rank Math or Yoast</span>
+        </div>
+        """, unsafe_allow_html=True)
 
 
 def get_integration_status() -> Dict[str, any]:
@@ -456,16 +611,24 @@ def render_integrations_panel(process_post_id_upload: Callable):
         st.caption("🔒 Credentials stored in your browser session only. Cleared when you close the tab.")
     else:
         st.markdown("""
-        <div style="background: #f0fdfa; border-radius: 8px; padding: 0.75rem 1rem; margin-top: -0.5rem; margin-bottom: 1rem; border: 1px solid #a7f3d0;">
+        <div style="background: #f0fdfa; border-radius: 8px; padding: 0.75rem 1rem; margin-top: -0.5rem; margin-bottom: 0.5rem; border: 1px solid #a7f3d0;">
             <span style="color: #065f46;">✅ <strong>WordPress connected</strong> — Ready to apply fixes</span>
         </div>
         """, unsafe_allow_html=True)
+
+        # Show detected SEO plugins
+        render_detected_plugins()
 
         if st.button("🔌 Disconnect WordPress", key="disconnect_wp_integration"):
             if st.session_state.wp_client:
                 st.session_state.wp_client.close()
             st.session_state.wp_connected = False
             st.session_state.wp_client = None
+            # Clear SEO detection cache
+            if 'seo_detection_summary' in st.session_state:
+                del st.session_state.seo_detection_summary
+            if 'seo_service' in st.session_state:
+                del st.session_state.seo_service
             st.rerun()
 
     # ===========================================
