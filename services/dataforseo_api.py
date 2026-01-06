@@ -252,18 +252,12 @@ class DataForSEOClient:
         Returns None on failure, allowing caller to fall back to mock data
         """
         # DataForSEO backlinks/backlinks endpoint with filter for broken pages
-        # We look for backlinks where the target page returns 4xx or 5xx status
+        # Filter for backlinks where the target URL returns 4xx or 5xx status codes
         data = [{
             "target": clean_domain,
             "mode": "as_is",
             "filters": [
-                ["page_from_status_code", ">=", 200],
-                "and",
-                [
-                    ["page_to_status_code", ">=", 400],
-                    "or",
-                    ["page_to_status_code", "=", 0]
-                ]
+                ["url_to_status_code", "in", [400, 401, 403, 404, 410, 500, 502, 503, 504]]
             ],
             "limit": 100,
             "order_by": ["rank,desc"]
@@ -305,8 +299,8 @@ class DataForSEOClient:
         # Transform API response to our format
         broken_backlinks = []
         for item in items:
-            # Extract HTTP status code from page_to_status_code
-            http_code = item.get("page_to_status_code", 404)
+            # Extract HTTP status code from url_to_status_code
+            http_code = item.get("url_to_status_code", 404)
             if http_code == 0:
                 http_code = 404  # Treat unreachable as 404
 
