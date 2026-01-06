@@ -13,7 +13,12 @@ import re
 import streamlit as st
 from urllib.parse import urlparse
 
-from config import PRIMARY_TEAL, RECLAIM_TEASER_COUNT
+from config import (
+    PRIMARY_TEAL,
+    RECLAIM_TEASER_COUNT,
+    RECLAIM_SESSION_LIMIT,
+    RECLAIM_IP_DAILY_LIMIT
+)
 from services.supabase_client import SupabaseClient
 from services.dataforseo_api import DataForSEOClient
 
@@ -467,6 +472,8 @@ def render_landing_page():
         st.session_state.email_captured = False
     if "scanned_domain" not in st.session_state:
         st.session_state.scanned_domain = ""
+    if "session_scan_count" not in st.session_state:
+        st.session_state.session_scan_count = 0
 
     # Brand header
     st.markdown("""
@@ -500,10 +507,52 @@ def render_landing_page():
         key="domain_input"
     )
 
-    scan_clicked = st.button("Scan for Broken Backlinks", type="primary", use_container_width=True)
+    # Check rate limits before showing scan button
+    ip_address = get_client_ip()
+    ip_scan_count = supabase.get_ip_scan_count_today(ip_address) if ip_address else 0
+    session_scan_count = st.session_state.session_scan_count
+
+    # Determine if user is rate limited
+    session_limit_reached = session_scan_count >= RECLAIM_SESSION_LIMIT
+    ip_limit_reached = ip_scan_count >= RECLAIM_IP_DAILY_LIMIT
+    is_rate_limited = session_limit_reached or ip_limit_reached
+
+    # Show remaining scans info if they've used any
+    if session_scan_count > 0 and not is_rate_limited:
+        remaining_session = RECLAIM_SESSION_LIMIT - session_scan_count
+        remaining_ip = RECLAIM_IP_DAILY_LIMIT - ip_scan_count
+        remaining = min(remaining_session, remaining_ip)
+        st.markdown(f"""
+            <p style="text-align: center; color: #64748b; font-size: 0.85rem; margin-top: 0.5rem;">
+                {remaining} free scan{'s' if remaining != 1 else ''} remaining
+            </p>
+        """, unsafe_allow_html=True)
+
+    # Show rate limit message if exceeded
+    if is_rate_limited:
+        st.markdown("""
+            <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 2px solid #f59e0b; border-radius: 12px; padding: 1.5rem; text-align: center; margin: 1rem 0;">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">⏰</div>
+                <h3 style="color: #92400e; margin-bottom: 0.5rem; font-size: 1.25rem;">Daily Scan Limit Reached</h3>
+                <p style="color: #a16207; font-size: 1rem; line-height: 1.5;">
+                    You've used all your free scans for today. Come back tomorrow for more, or explore our main tool below to fix other SEO issues on your site.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+
+        if st.button("🔧 Explore Screaming Fixes", type="primary", use_container_width=True, key="rate_limit_cta"):
+            st.query_params.clear()
+            st.rerun()
+
+    scan_clicked = st.button(
+        "Scan for Broken Backlinks",
+        type="primary",
+        use_container_width=True,
+        disabled=is_rate_limited
+    )
 
     # Handle scan
-    if scan_clicked and domain_input:
+    if scan_clicked and domain_input and not is_rate_limited:
         domain = clean_domain(domain_input)
 
         if not domain or "." not in domain:
@@ -530,8 +579,10 @@ def render_landing_page():
                     st.session_state.scanned_domain = domain
                     st.session_state.email_captured = False
 
-                    # Save scan to database
-                    ip_address = get_client_ip()
+                    # Increment session scan counter for rate limiting
+                    st.session_state.session_scan_count += 1
+
+                    # Save scan to database (also used for IP rate limiting)
                     supabase.create_scan(
                         domain=domain,
                         broken_backlinks_count=broken_count,

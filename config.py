@@ -65,3 +65,7 @@ PRIMARY_TEAL_DARKER = "#0f766e"
 RECLAIM_TEASER_COUNT = 3  # Number of results to show before email capture
 RECLAIM_MIN_BROKEN = 30  # Minimum mock broken backlinks
 RECLAIM_MAX_BROKEN = 60  # Maximum mock broken backlinks
+
+# Rate limiting for abuse prevention
+RECLAIM_SESSION_LIMIT = 3  # Max scans per browser session
+RECLAIM_IP_DAILY_LIMIT = 5  # Max scans per IP address per day

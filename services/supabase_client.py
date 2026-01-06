@@ -148,3 +148,27 @@ class SupabaseClient:
             return True
         except requests.exceptions.RequestException:
             return False
+
+    def get_ip_scan_count_today(self, ip_address: str) -> int:
+        """
+        Get the number of scans from an IP address today.
+        Used for rate limiting abuse prevention.
+        """
+        if not ip_address:
+            return 0
+
+        # Get today's date in ISO format for filtering
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+
+        # Query scans created today from this IP
+        url = f"{self.url}/rest/v1/scans?ip_address=eq.{ip_address}&created_at=gte.{today}T00:00:00Z&select=id"
+
+        try:
+            response = requests.get(url, headers=self.headers)
+            response.raise_for_status()
+            result = response.json()
+            return len(result) if result else 0
+        except requests.exceptions.RequestException as e:
+            print(f"Error checking IP scan count: {e}")
+            # On error, allow the scan (fail open for better UX)
+            return 0
