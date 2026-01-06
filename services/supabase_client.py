@@ -7,15 +7,17 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 import requests
 
-from config import SUPABASE_URL, SUPABASE_KEY
+from config import get_secret
 
 
 class SupabaseClient:
     """Client for interacting with Supabase database"""
 
     def __init__(self):
-        self.url = SUPABASE_URL
-        self.key = SUPABASE_KEY
+        # Fetch credentials dynamically (important for Streamlit Cloud where
+        # st.secrets may not be available at module import time)
+        self.url = get_secret("SUPABASE_URL", "https://yybfjsjysfteqjvicuuy.supabase.co")
+        self.key = get_secret("SUPABASE_KEY", "")
         self.headers = {
             "apikey": self.key,
             "Authorization": f"Bearer {self.key}",

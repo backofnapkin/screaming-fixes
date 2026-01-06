@@ -11,9 +11,7 @@ from urllib.parse import urlparse
 import requests
 
 from config import (
-    DATAFORSEO_LOGIN,
-    DATAFORSEO_PASSWORD,
-    USE_MOCK_DATA,
+    get_secret,
     RECLAIM_MIN_BROKEN,
     RECLAIM_MAX_BROKEN
 )
@@ -194,9 +192,11 @@ class DataForSEOClient:
     """Client for DataForSEO Backlinks API with mock data fallback"""
 
     def __init__(self):
-        self.login = DATAFORSEO_LOGIN
-        self.password = DATAFORSEO_PASSWORD
-        self.use_mock = USE_MOCK_DATA
+        # Fetch credentials dynamically (important for Streamlit Cloud where
+        # st.secrets may not be available at module import time)
+        self.login = get_secret("DATAFORSEO_LOGIN", "")
+        self.password = get_secret("DATAFORSEO_PASSWORD", "")
+        self.use_mock = not (self.login and self.password)
         self.base_url = "https://api.dataforseo.com/v3"
 
     def _get_auth_header(self) -> str:
