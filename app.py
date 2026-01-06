@@ -5124,36 +5124,34 @@ def main():
 
 
 if __name__ == "__main__":
-    # Check for landing page routing
-    feature = st.query_params.get("feature", "")
-    from_param = st.query_params.get("from", "")
+    # Check for navigation flag from landing page (set before query params cleared)
+    # This flag persists in session state across the rerun
+    navigate_to_fix = st.session_state.get('navigate_to_fix_workflow', False)
 
-    if feature == "reclaim":
-        # Load the backlink reclaim landing page
-        try:
-            from landing_reclaim import render_landing_page
-            render_landing_page()
-        except ImportError as e:
-            st.error(f"Landing page module not found: {e}")
-            main()
-    elif from_param == "reclaim":
-        # Coming from landing page with scan data - go to main tool
-        # Clear the query param to avoid re-processing on refresh
-        st.query_params.clear()
+    if navigate_to_fix:
+        # Clear the flag so we don't loop
+        st.session_state.navigate_to_fix_workflow = False
 
         # Initialize backlink reclaim state if needed
         init_backlink_reclaim_state()
 
-        # Check if we have scan results loaded
-        has_br_data = st.session_state.get('br_grouped_pages') and len(st.session_state.br_grouped_pages) > 0
+        # Ensure we're on the backlink_reclaim task
+        st.session_state.current_task = 'backlink_reclaim'
+        st.session_state.task_type = 'backlink_reclaim'
 
-        if has_br_data:
-            # Data is loaded, ensure we're on the backlink_reclaim task
-            st.session_state.current_task = 'backlink_reclaim'
-            st.session_state.task_type = 'backlink_reclaim'
-
-        # Run main app (will show backlink reclaim tab if data exists,
-        # or show scan input in the expander if no data)
+        # Run main app with the loaded data
         main()
     else:
-        main()
+        # Check for landing page routing via query params
+        feature = st.query_params.get("feature", "")
+
+        if feature == "reclaim":
+            # Load the backlink reclaim landing page
+            try:
+                from landing_reclaim import render_landing_page
+                render_landing_page()
+            except ImportError as e:
+                st.error(f"Landing page module not found: {e}")
+                main()
+        else:
+            main()

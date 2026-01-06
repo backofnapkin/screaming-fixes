@@ -777,9 +777,11 @@ def render_landing_page():
                         st.session_state.current_task = 'backlink_reclaim'
                         st.session_state.task_type = 'backlink_reclaim'
 
-                        # Navigate to main tool with from=reclaim param
+                        # Set flag to navigate to main tool on next rerun
+                        st.session_state.navigate_to_fix_workflow = True
+
+                        # Clear query params (removes ?feature=reclaim)
                         st.query_params.clear()
-                        st.query_params['from'] = 'reclaim'
                         st.rerun()
                 with col2:
                     # Generate CSV data
@@ -877,9 +879,11 @@ def render_landing_page():
                     st.session_state.current_task = 'backlink_reclaim'
                     st.session_state.task_type = 'backlink_reclaim'
 
-                    # Navigate to main tool with from=reclaim param
+                    # Set flag to navigate to main tool on next rerun
+                    st.session_state.navigate_to_fix_workflow = True
+
+                    # Clear query params (removes ?feature=reclaim)
                     st.query_params.clear()
-                    st.query_params['from'] = 'reclaim'
                     st.rerun()
 
                 st.markdown("""
