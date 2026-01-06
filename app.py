@@ -54,6 +54,17 @@ from components.sidebar import (
     render_integrations_panel,
 )
 
+# Import backlink reclaim feature
+from features.backlink_reclaim import (
+    init_backlink_reclaim_state,
+    reset_backlink_reclaim_state,
+    load_scan_results,
+    render_backlink_fix_workflow,
+)
+
+# Import DataForSEO client
+from services.dataforseo_api import DataForSEOClient
+
 # Page config
 st.set_page_config(
     page_title="Screaming Fixes",
@@ -782,10 +793,71 @@ def render_upload_section():
         1. Run a crawl in Screaming Frog
         2. Go to **Bulk Export → Images → All Image Inlinks**
         3. Save and upload the CSV
-        
+
         *Requires all integrations to be connected (Post IDs + AI + WordPress)*
         """)
-    
+
+    # Backlink Reclaim scan section
+    with st.expander("🔙 Backlink Reclaim — Scan for broken backlinks", expanded=False):
+        st.markdown("""
+        Scan any domain to find external sites linking to broken pages on your site.
+        Fix these by creating redirects to reclaim lost link equity.
+        """)
+
+        br_domain_input = st.text_input(
+            "Domain to scan",
+            placeholder="example.com",
+            key="br_domain_input",
+            help="Enter your domain without https:// or www."
+        )
+
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            scan_clicked = st.button(
+                "🔍 Scan Domain",
+                key="br_scan_button",
+                disabled=not br_domain_input,
+                type="primary"
+            )
+
+        if scan_clicked and br_domain_input:
+            # Initialize backlink reclaim state if needed
+            init_backlink_reclaim_state()
+
+            with st.spinner("Scanning backlinks... (this may take 30 seconds)"):
+                try:
+                    client = DataForSEOClient()
+                    backlinks, broken_count, total_count, api_cost, error = client.get_broken_backlinks(br_domain_input)
+
+                    if error:
+                        st.error(f"Scan failed: {error}")
+                    elif broken_count == 0:
+                        st.info(f"No broken backlinks found for {br_domain_input}. Great news!")
+                    else:
+                        # Build scan results object matching expected format
+                        scan_results = {
+                            'domain': br_domain_input,
+                            'broken_backlinks': backlinks,
+                            'broken_count': broken_count,
+                            'total_count': total_count,
+                            'api_cost_cents': api_cost,
+                        }
+
+                        # Load into backlink reclaim state
+                        load_scan_results(scan_results, br_domain_input)
+
+                        # Switch to backlink_reclaim task
+                        st.session_state.current_task = 'backlink_reclaim'
+                        st.session_state.task_type = 'backlink_reclaim'
+
+                        st.success(f"Found {broken_count} broken backlinks on {br_domain_input}!")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Error scanning domain: {str(e)}")
+
+        # Note about DataForSEO
+        st.caption("Powered by DataForSEO API. Uses demo data if no API credentials are configured.")
+
     uploaded = st.file_uploader(
         "Upload your Screaming Frog CSV",
         type=['csv'],
@@ -894,7 +966,28 @@ def render_upload_section():
                         st.session_state.current_task = 'broken_links' if has_broken_links else ('redirect_chains' if has_redirect_chains else None)
                         st.session_state.task_type = st.session_state.current_task
                     st.rerun()
-        
+
+        # Backlink Reclaim card
+        has_backlink_reclaim = st.session_state.br_grouped_pages and len(st.session_state.br_grouped_pages) > 0
+        if has_backlink_reclaim:
+            br_count = len(st.session_state.br_grouped_pages)
+            br_domain = st.session_state.br_domain
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #ccfbf1 0%, #99f6e4 100%); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid #5eead4; margin-bottom: 0.5rem;">
+                    <span style="font-weight: 600; color: #0f766e;">🔙 Backlink Reclaim</span>
+                    <span style="color: #0d9488; margin-left: 0.5rem;">{br_count} broken backlinks on {br_domain}</span>
+                </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                if st.button("✕", key="clear_backlink_reclaim", help="Clear Backlink Reclaim"):
+                    reset_backlink_reclaim_state()
+                    if st.session_state.current_task == 'backlink_reclaim':
+                        st.session_state.current_task = 'broken_links' if has_broken_links else ('redirect_chains' if has_redirect_chains else ('image_alt_text' if has_image_alt_text else None))
+                        st.session_state.task_type = st.session_state.current_task
+                    st.rerun()
+
         st.markdown("")  # Spacing
     
     # Privacy and disclaimer (only show if no files uploaded yet)
@@ -3522,35 +3615,43 @@ def render_task_switcher():
     # Count items in each task type
     broken_count = len(st.session_state.broken_urls) if st.session_state.broken_urls else 0
     broken_pending = sum(1 for d in st.session_state.decisions.values() if not d.get('approved_action')) if st.session_state.decisions else 0
-    
+
     rc_count = len(st.session_state.rc_redirects) if st.session_state.rc_redirects else 0
     rc_pending = sum(1 for d in st.session_state.rc_decisions.values() if not d.get('approved_action')) if st.session_state.rc_decisions else 0
-    
+
     iat_count = len(st.session_state.iat_images) if st.session_state.iat_images else 0
     iat_pending = sum(1 for d in st.session_state.iat_decisions.values() if not d.get('approved_action')) if st.session_state.iat_decisions else 0
-    
+
+    # Backlink Reclaim counts
+    br_count = len(st.session_state.br_grouped_pages) if st.session_state.br_grouped_pages else 0
+    br_pending = br_count - len(st.session_state.br_approved_redirects) if br_count > 0 else 0
+
     # Build options list
     options = []
     option_labels = []
-    
+
     if broken_count > 0:
         options.append('broken_links')
         option_labels.append(f"🔗 Broken Links ({broken_pending} pending)" if broken_pending > 0 else f"🔗 Broken Links (✓ {broken_count} done)")
-    
+
     if rc_count > 0:
         options.append('redirect_chains')
         option_labels.append(f"🔄 Redirect Chains ({rc_pending} pending)" if rc_pending > 0 else f"🔄 Redirect Chains (✓ {rc_count} done)")
-    
+
     if iat_count > 0:
         options.append('image_alt_text')
         option_labels.append(f"🖼️ Image Alt Text ({iat_pending} pending)" if iat_pending > 0 else f"🖼️ Image Alt Text (✓ {iat_count} done)")
-    
+
+    if br_count > 0:
+        options.append('backlink_reclaim')
+        option_labels.append(f"🔙 Backlink Reclaim ({br_pending} pending)" if br_pending > 0 else f"🔙 Backlink Reclaim (✓ {br_count} done)")
+
     # Only show switcher if we have multiple task types
     if len(options) <= 1:
         return
-    
+
     current_idx = options.index(st.session_state.current_task) if st.session_state.current_task in options else 0
-    
+
     selected = st.selectbox(
         "Current Task:",
         options,
@@ -3558,7 +3659,7 @@ def render_task_switcher():
         format_func=lambda x: option_labels[options.index(x)],
         key="task_switcher"
     )
-    
+
     if selected != st.session_state.current_task:
         st.session_state.current_task = selected
         st.rerun()
@@ -4937,22 +5038,26 @@ def main():
     
     render_progress_indicator()
     
+    # Initialize backlink reclaim state
+    init_backlink_reclaim_state()
+
     # Check state AFTER upload section (in case new file was just processed)
     has_broken_links = st.session_state.df is not None
     has_redirect_chains = st.session_state.rc_df is not None
     has_image_alt_text = st.session_state.iat_df is not None
+    has_backlink_reclaim = st.session_state.br_grouped_pages and len(st.session_state.br_grouped_pages) > 0
     has_post_ids = st.session_state.has_post_ids
-    
+
     # If data is loaded, show the workflow below
-    if has_broken_links or has_redirect_chains or has_image_alt_text:
+    if has_broken_links or has_redirect_chains or has_image_alt_text or has_backlink_reclaim:
         st.markdown("---")
-        
+
         # Show task switcher if multiple tasks
         render_task_switcher()
-        
+
         # Render based on current task type
         current_task = st.session_state.current_task
-        
+
         if current_task == 'redirect_chains' and has_redirect_chains:
             # Redirect Chains workflow
             st.markdown('<p class="section-header">🔄 Redirect Chains</p>', unsafe_allow_html=True)
@@ -4964,7 +5069,7 @@ def main():
             render_wordpress_section()
             st.markdown("---")
             render_rc_export_section()
-        
+
         elif current_task == 'broken_links' and has_broken_links:
             # Broken Links workflow (existing)
             st.markdown('<p class="section-header">🔗 Broken Links</p>', unsafe_allow_html=True)
@@ -4975,7 +5080,7 @@ def main():
             render_wordpress_section()
             st.markdown("---")
             render_export_section()
-        
+
         elif current_task == 'image_alt_text' and has_image_alt_text:
             # Image Alt Text workflow
             st.markdown('<p class="section-header">🖼️ Image Alt Text</p>', unsafe_allow_html=True)
@@ -4986,7 +5091,18 @@ def main():
             render_wordpress_section()
             st.markdown("---")
             render_iat_export_section()
-        
+
+        elif current_task == 'backlink_reclaim' and has_backlink_reclaim:
+            # Backlink Reclaim workflow
+            st.markdown('<p class="section-header">🔙 Backlink Reclaim</p>', unsafe_allow_html=True)
+            # Get WordPress client if connected
+            wp_client = st.session_state.wp_client if st.session_state.wp_connected else None
+            render_backlink_fix_workflow(
+                scan_results=st.session_state.br_scan_results,
+                domain=st.session_state.br_domain,
+                wp_client=wp_client
+            )
+
         else:
             # Fallback - show whatever data we have
             if has_redirect_chains:
@@ -4997,6 +5113,9 @@ def main():
                 st.rerun()
             elif has_image_alt_text:
                 st.session_state.current_task = 'image_alt_text'
+                st.rerun()
+            elif has_backlink_reclaim:
+                st.session_state.current_task = 'backlink_reclaim'
                 st.rerun()
     
     render_about()
