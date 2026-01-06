@@ -3,9 +3,12 @@ Configuration for Screaming Fixes Landing Pages
 """
 
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from the same directory as this config file
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 # =============================================================================
 # SUPABASE CONFIGURATION

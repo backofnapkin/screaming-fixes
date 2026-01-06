@@ -220,28 +220,50 @@ class DataForSEOClient:
             print(f"DataForSEO API error: {e}")
             return {"status_code": 500, "status_message": str(e)}
 
-    def get_broken_backlinks(self, domain: str) -> Tuple[List[Dict], int, int, int]:
+    def get_broken_backlinks(self, domain: str) -> Tuple[List[Dict], int, int, int, Optional[str]]:
         """
         Get broken backlinks for a domain
 
-        Returns: (broken_backlinks, broken_count, total_count, api_cost_cents)
+        Tries real DataForSEO API first, falls back to mock data on failure.
+
+        Returns: (broken_backlinks, broken_count, total_count, api_cost_cents, error_message)
         """
         # Clean domain (remove protocol and www)
         parsed = urlparse(domain if "://" in domain else f"https://{domain}")
         clean_domain = parsed.netloc or parsed.path
         clean_domain = clean_domain.replace("www.", "")
 
-        if self.use_mock:
-            backlinks, broken_count, total_count = _generate_mock_results(clean_domain)
-            return backlinks, broken_count, total_count, 0
+        # Try real API first if credentials are configured
+        if not self.use_mock:
+            result = self._fetch_from_api(clean_domain)
+            if result is not None:
+                return result
+            # API failed - fall through to mock data
+            print(f"DataForSEO API failed for {clean_domain}, using mock data")
 
-        # Real API call (when credentials are configured)
-        # Using the backlinks/backlinks endpoint to find broken links
+        # Use mock data (either no credentials or API failed)
+        backlinks, broken_count, total_count = _generate_mock_results(clean_domain)
+        return backlinks, broken_count, total_count, 0, None
+
+    def _fetch_from_api(self, clean_domain: str) -> Optional[Tuple[List[Dict], int, int, int, Optional[str]]]:
+        """
+        Fetch broken backlinks from DataForSEO API
+
+        Returns None on failure, allowing caller to fall back to mock data
+        """
+        # DataForSEO backlinks/backlinks endpoint with filter for broken pages
+        # We look for backlinks where the target page returns 4xx or 5xx status
         data = [{
             "target": clean_domain,
             "mode": "as_is",
             "filters": [
-                ["is_lost", "=", True]
+                ["page_from_status_code", ">=", 200],
+                "and",
+                [
+                    ["page_to_status_code", ">=", 400],
+                    "or",
+                    ["page_to_status_code", "=", 0]
+                ]
             ],
             "limit": 100,
             "order_by": ["rank,desc"]
@@ -249,41 +271,65 @@ class DataForSEOClient:
 
         result = self._request("backlinks/backlinks/live", data)
 
+        # Check for API-level errors
         if result.get("status_code") != 20000:
-            # Fall back to mock data on API error
-            backlinks, broken_count, total_count = _generate_mock_results(clean_domain)
-            return backlinks, broken_count, total_count, 0
+            error_msg = result.get("status_message", "Unknown API error")
+            print(f"DataForSEO API error: {error_msg}")
+            return None
 
-        # Parse API response
+        # Parse response
         tasks = result.get("tasks", [])
         if not tasks:
-            return [], 0, 0, 0
+            return [], 0, 0, 0, None
 
         task = tasks[0]
-        api_cost = int(task.get("cost", 0) * 100)  # Convert to cents
+
+        # Check task-level status
+        task_status = task.get("status_code")
+        if task_status != 20000:
+            error_msg = task.get("status_message", "Task failed")
+            print(f"DataForSEO task error: {error_msg}")
+            return None
+
+        api_cost = int(float(task.get("cost", 0)) * 100)  # Convert to cents
         result_data = task.get("result", [])
 
         if not result_data:
-            return [], 0, 0, api_cost
+            # No results but API succeeded - domain may have no broken backlinks
+            return [], 0, 0, api_cost, None
 
-        items = result_data[0].get("items", [])
-        total_count = result_data[0].get("total_count", 0)
+        first_result = result_data[0]
+        items = first_result.get("items", []) or []
+        total_count = first_result.get("total_count", 0)
 
         # Transform API response to our format
         broken_backlinks = []
         for item in items:
+            # Extract HTTP status code from page_to_status_code
+            http_code = item.get("page_to_status_code", 404)
+            if http_code == 0:
+                http_code = 404  # Treat unreachable as 404
+
+            # Get first_seen date and format it
+            first_seen = item.get("first_seen", "")
+            if first_seen and "T" in first_seen:
+                first_seen = first_seen.split("T")[0]  # Just the date part
+
             broken_backlinks.append({
                 "referring_domain": item.get("domain_from", ""),
                 "referring_url": item.get("url_from", ""),
                 "target_url": item.get("url_to", ""),
-                "anchor_text": item.get("anchor", ""),
-                "domain_rank": item.get("rank", 0),
+                "anchor_text": item.get("anchor", "") or "No anchor text",
+                "domain_rank": item.get("rank", 0) or item.get("domain_from_rank", 0),
                 "is_dofollow": item.get("dofollow", False),
-                "first_seen": item.get("first_seen", ""),
-                "http_code": 404  # Lost backlinks
+                "first_seen": first_seen,
+                "http_code": http_code
             })
 
-        return broken_backlinks, len(broken_backlinks), total_count, api_cost
+        # Sort by domain rank (highest authority first)
+        broken_backlinks.sort(key=lambda x: x.get("domain_rank", 0), reverse=True)
+
+        return broken_backlinks, len(broken_backlinks), total_count, api_cost, None
 
     def get_top_referrers(self, backlinks: List[Dict], limit: int = 5) -> List[Dict]:
         """Extract top referring domains from backlinks list"""

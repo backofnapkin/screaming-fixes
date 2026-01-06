@@ -510,34 +510,38 @@ def render_landing_page():
             st.error("Please enter a valid domain (e.g., example.com)")
         else:
             with st.spinner("Scanning backlinks..."):
-                # Get backlink data
-                backlinks, broken_count, total_count, api_cost = dataforseo.get_broken_backlinks(domain)
-                top_referrers = dataforseo.get_top_referrers(backlinks, limit=5)
+                # Get backlink data (tries real API first, falls back to mock)
+                backlinks, broken_count, total_count, api_cost, error = dataforseo.get_broken_backlinks(domain)
 
-                # Store in session state
-                st.session_state.scan_results = {
-                    "domain": domain,
-                    "backlinks": backlinks,
-                    "broken_count": broken_count,
-                    "total_count": total_count,
-                    "top_referrers": top_referrers,
-                    "api_cost": api_cost
-                }
-                st.session_state.scanned_domain = domain
-                st.session_state.email_captured = False
+                if error:
+                    st.error(f"Scan failed: {error}")
+                else:
+                    top_referrers = dataforseo.get_top_referrers(backlinks, limit=5)
 
-                # Save scan to database
-                ip_address = get_client_ip()
-                supabase.create_scan(
-                    domain=domain,
-                    broken_backlinks_count=broken_count,
-                    total_backlinks=total_count,
-                    results_json=backlinks,
-                    ip_address=ip_address,
-                    api_cost_cents=api_cost
-                )
+                    # Store in session state
+                    st.session_state.scan_results = {
+                        "domain": domain,
+                        "backlinks": backlinks,
+                        "broken_count": broken_count,
+                        "total_count": total_count,
+                        "top_referrers": top_referrers,
+                        "api_cost": api_cost
+                    }
+                    st.session_state.scanned_domain = domain
+                    st.session_state.email_captured = False
 
-            st.rerun()
+                    # Save scan to database
+                    ip_address = get_client_ip()
+                    supabase.create_scan(
+                        domain=domain,
+                        broken_backlinks_count=broken_count,
+                        total_backlinks=total_count,
+                        results_json=backlinks,
+                        ip_address=ip_address,
+                        api_cost_cents=api_cost
+                    )
+
+                    st.rerun()
 
     # Display results
     if st.session_state.scan_results:
