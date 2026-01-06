@@ -555,208 +555,244 @@ def render_landing_page():
             </div>
         """, unsafe_allow_html=True)
 
-        # Metrics
-        st.markdown(f"""
-            <div class="metric-row">
-                <div class="metric-card">
-                    <div class="metric-value">{results['broken_count']}</div>
-                    <div class="metric-label">Broken Backlinks</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-value">{results['total_count']}</div>
-                    <div class="metric-label">Total Backlinks</div>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-
-        # Show teaser or full results
-        if not st.session_state.email_captured:
-            # Show top 3 results
-            st.markdown("### Top Opportunities", unsafe_allow_html=True)
-
-            teaser_backlinks = backlinks[:RECLAIM_TEASER_COUNT]
-            for bl in teaser_backlinks:
-                st.markdown(render_backlink_card(bl), unsafe_allow_html=True)
-
-            # Blurred preview of remaining
-            if len(backlinks) > RECLAIM_TEASER_COUNT:
-                remaining_count = len(backlinks) - RECLAIM_TEASER_COUNT
-
-                st.markdown('<div class="teaser-overlay">', unsafe_allow_html=True)
-
-                # Show 2 blurred cards
-                st.markdown('<div class="teaser-blur">', unsafe_allow_html=True)
-                for bl in backlinks[RECLAIM_TEASER_COUNT:RECLAIM_TEASER_COUNT + 2]:
-                    st.markdown(render_backlink_card(bl), unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                st.markdown('</div>', unsafe_allow_html=True)
-
-            # Email capture CTA
-            st.markdown(f"""
-                <div class="teaser-cta">
-                    <div class="teaser-cta-title">Unlock All {results['broken_count']} Broken Backlinks</div>
-                </div>
-            """, unsafe_allow_html=True)
-
-            # Email input with label
-            st.markdown('<div class="email-section">', unsafe_allow_html=True)
+        # Check for zero broken backlinks - show congratulations
+        if results['broken_count'] == 0:
             st.markdown("""
-                <p style="text-align: center; color: #64748b; margin-bottom: 0.5rem; font-size: 1rem;">
-                    Enter your email address
-                </p>
-            """, unsafe_allow_html=True)
-            email_input = st.text_input(
-                "Enter your email address",
-                placeholder="you@example.com",
-                label_visibility="collapsed",
-                key="email_input"
-            )
-
-            # Description text below
-            st.markdown("""
-                <p style="text-align: center; color: #64748b; font-size: 0.9rem; margin-top: 0.5rem; line-height: 1.5;">
-                    Enter your email to see the full list and fix all of these links now. This tool is 100% free and unlocks other features like broken links, redirect chains, and technical SEO fixes you can push directly to WordPress.
-                </p>
-            """, unsafe_allow_html=True)
-
-            unlock_clicked = st.button("Unlock Full Results", type="primary", use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            if unlock_clicked:
-                if not email_input:
-                    st.error("Please enter your email address")
-                elif not is_valid_email(email_input):
-                    st.error("Please enter a valid email address")
-                else:
-                    # Save lead
-                    utm = get_utm_params()
-                    ip_address = get_client_ip()
-
-                    lead = supabase.create_lead(
-                        email=email_input,
-                        domain=results["domain"],
-                        broken_backlinks_count=results["broken_count"],
-                        top_referrers=results["top_referrers"],
-                        ip_address=ip_address,
-                        utm_source=utm["utm_source"],
-                        utm_medium=utm["utm_medium"],
-                        utm_campaign=utm["utm_campaign"]
-                    )
-
-                    st.session_state.email_captured = True
-                    st.rerun()
-
-        else:
-            # Full results view
-            st.markdown("""
-                <div class="success-message">
-                    <h3>Results Unlocked!</h3>
-                    <p>You're losing link equity from these dead pages. Export the list or fix them now.</p>
-                </div>
-                <style>
-                    /* Equal button heights for action buttons */
-                    .action-buttons-row .stButton > button,
-                    .action-buttons-row .stDownloadButton > button {
-                        height: 48px !important;
-                        min-height: 48px !important;
-                        padding: 0.5rem 1rem !important;
-                    }
-                </style>
-            """, unsafe_allow_html=True)
-
-            # Action buttons row
-            st.markdown('<div class="action-buttons-row">', unsafe_allow_html=True)
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("🚀 Fix These Now", type="primary", use_container_width=True):
-                    st.query_params.clear()
-                    st.rerun()
-            with col2:
-                # Generate CSV data
-                csv_data = generate_csv_export(backlinks, results["domain"])
-                st.download_button(
-                    label="📥 Export CSV",
-                    data=csv_data,
-                    file_name=f"{results['domain']}_broken_backlinks.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            # Full results table with pagination
-            total_backlinks = len(backlinks)
-            per_page = 10
-
-            # Initialize pagination state
-            if "backlinks_page" not in st.session_state:
-                st.session_state.backlinks_page = 0
-
-            total_pages = (total_backlinks + per_page - 1) // per_page  # Ceiling division
-            current_page = st.session_state.backlinks_page
-
-            # Ensure current page is within bounds
-            if current_page >= total_pages:
-                current_page = max(0, total_pages - 1)
-                st.session_state.backlinks_page = current_page
-
-            start_idx = current_page * per_page
-            end_idx = min(start_idx + per_page, total_backlinks)
-
-            st.markdown(f"### All Broken Backlinks ({total_backlinks} total)", unsafe_allow_html=True)
-
-            # Show current page of results
-            for bl in backlinks[start_idx:end_idx]:
-                st.markdown(render_backlink_card(bl), unsafe_allow_html=True)
-
-            # Pagination controls
-            if total_pages > 1:
-                st.markdown(f"""
-                    <p style="text-align: center; color: #64748b; margin: 1rem 0 0.5rem 0;">
-                        Showing {start_idx + 1}-{end_idx} of {total_backlinks} backlinks
+                <div style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border: 2px solid #10b981; border-radius: 16px; padding: 2rem; text-align: center; margin: 1rem 0 2rem 0;">
+                    <div style="font-size: 3rem; margin-bottom: 1rem;">🏆</div>
+                    <h2 style="color: #065f46; margin-bottom: 0.75rem; font-size: 1.75rem;">Your Backlink Game is STRONG!</h2>
+                    <p style="color: #047857; font-size: 1.1rem; margin-bottom: 0.5rem; font-weight: 600;">
+                        Zero broken backlinks found. You're either an SEO wizard or you've been secretly using Screaming Fixes already.
                     </p>
-                """, unsafe_allow_html=True)
-
-                col_prev, col_page, col_next = st.columns([1, 2, 1])
-
-                with col_prev:
-                    if current_page > 0:
-                        if st.button("← Previous", key="prev_page", use_container_width=True):
-                            st.session_state.backlinks_page = current_page - 1
-                            st.rerun()
-
-                with col_page:
-                    st.markdown(f"""
-                        <p style="text-align: center; color: #0d9488; font-weight: 600; padding: 0.5rem 0;">
-                            Page {current_page + 1} of {total_pages}
-                        </p>
-                    """, unsafe_allow_html=True)
-
-                with col_next:
-                    if current_page < total_pages - 1:
-                        if st.button("Next →", key="next_page", use_container_width=True):
-                            st.session_state.backlinks_page = current_page + 1
-                            st.rerun()
-
-            # Bottom CTA section
-            st.markdown("""
-                <div style="background: linear-gradient(135deg, #f0fdfa 0%, #ecfeff 100%); border: 2px solid #14b8a6; border-radius: 16px; padding: 2rem; text-align: center; margin-top: 2rem;">
-                    <h3 style="color: #0f172a; margin-bottom: 0.75rem; font-size: 1.5rem;">Ready to reclaim this link equity?</h3>
-                    <p style="color: #64748b; margin-bottom: 1.5rem; line-height: 1.6;">
-                        Screaming Fixes connects to your WordPress site and creates redirects for these dead pages in minutes. No manual .htaccess editing. No plugins to configure.
+                    <p style="color: #059669; font-size: 1rem; line-height: 1.6;">
+                        Your link equity is intact and Google is happy. But don't get too comfortable... there's always more SEO to fix!
                     </p>
                 </div>
             """, unsafe_allow_html=True)
 
-            if st.button("🔧 Open Screaming Fixes", type="primary", use_container_width=True, key="bottom_cta"):
+            # CTA to main tool
+            st.markdown("""
+                <div style="background: linear-gradient(135deg, #f0fdfa 0%, #ffffff 100%); border: 2px solid #14b8a6; border-radius: 16px; padding: 1.5rem; text-align: center;">
+                    <h3 style="color: #0f172a; margin-bottom: 0.75rem; font-size: 1.25rem;">While you're here...</h3>
+                    <p style="color: #64748b; margin-bottom: 1rem; line-height: 1.6;">
+                        Screaming Fixes can help with other SEO gremlins lurking on your site: <strong>404 errors</strong>, <strong>redirect loops</strong>, <strong>broken internal links</strong>, <strong>schema markup issues</strong>, and more. All fixable with one click to WordPress.
+                    </p>
+                </div>
+            """, unsafe_allow_html=True)
+
+            if st.button("🔧 Explore Screaming Fixes", type="primary", use_container_width=True):
                 st.query_params.clear()
                 st.rerun()
 
             st.markdown("""
-                <p style="text-align: center; color: #0d9488; font-weight: 500; margin-top: 1rem;">
-                    The SEO fixer that actually pushes changes to WordPress
+                <p style="text-align: center; color: #64748b; font-size: 0.9rem; margin-top: 1rem;">
+                    Or scan another domain above to check for broken backlinks
                 </p>
             """, unsafe_allow_html=True)
+
+        else:
+            # Metrics (only show when there are broken backlinks)
+            st.markdown(f"""
+                <div class="metric-row">
+                    <div class="metric-card">
+                        <div class="metric-value">{results['broken_count']}</div>
+                        <div class="metric-label">Broken Backlinks</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{results['total_count']}</div>
+                        <div class="metric-label">Total Backlinks</div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+
+            # Show teaser or full results
+            if not st.session_state.email_captured:
+                # Show top 3 results
+                st.markdown("### Top Opportunities", unsafe_allow_html=True)
+
+                teaser_backlinks = backlinks[:RECLAIM_TEASER_COUNT]
+                for bl in teaser_backlinks:
+                    st.markdown(render_backlink_card(bl), unsafe_allow_html=True)
+
+                # Blurred preview of remaining
+                if len(backlinks) > RECLAIM_TEASER_COUNT:
+                    remaining_count = len(backlinks) - RECLAIM_TEASER_COUNT
+
+                    st.markdown('<div class="teaser-overlay">', unsafe_allow_html=True)
+
+                    # Show 2 blurred cards
+                    st.markdown('<div class="teaser-blur">', unsafe_allow_html=True)
+                    for bl in backlinks[RECLAIM_TEASER_COUNT:RECLAIM_TEASER_COUNT + 2]:
+                        st.markdown(render_backlink_card(bl), unsafe_allow_html=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+                # Email capture CTA
+                st.markdown(f"""
+                    <div class="teaser-cta">
+                        <div class="teaser-cta-title">Unlock All {results['broken_count']} Broken Backlinks</div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                # Email input with label
+                st.markdown('<div class="email-section">', unsafe_allow_html=True)
+                st.markdown("""
+                    <p style="text-align: center; color: #64748b; margin-bottom: 0.5rem; font-size: 1rem;">
+                        Enter your email address
+                    </p>
+                """, unsafe_allow_html=True)
+                email_input = st.text_input(
+                    "Enter your email address",
+                    placeholder="you@example.com",
+                    label_visibility="collapsed",
+                    key="email_input"
+                )
+
+                # Description text below
+                st.markdown("""
+                    <p style="text-align: center; color: #64748b; font-size: 0.9rem; margin-top: 0.5rem; line-height: 1.5;">
+                        Enter your email to see the full list and fix all of these links now. This tool is 100% free and unlocks other features like broken links, redirect chains, and technical SEO fixes you can push directly to WordPress.
+                    </p>
+                """, unsafe_allow_html=True)
+
+                unlock_clicked = st.button("Unlock Full Results", type="primary", use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                if unlock_clicked:
+                    if not email_input:
+                        st.error("Please enter your email address")
+                    elif not is_valid_email(email_input):
+                        st.error("Please enter a valid email address")
+                    else:
+                        # Save lead
+                        utm = get_utm_params()
+                        ip_address = get_client_ip()
+
+                        lead = supabase.create_lead(
+                            email=email_input,
+                            domain=results["domain"],
+                            broken_backlinks_count=results["broken_count"],
+                            top_referrers=results["top_referrers"],
+                            ip_address=ip_address,
+                            utm_source=utm["utm_source"],
+                            utm_medium=utm["utm_medium"],
+                            utm_campaign=utm["utm_campaign"]
+                        )
+
+                        st.session_state.email_captured = True
+                        st.rerun()
+
+            else:
+                # Full results view
+                st.markdown("""
+                    <div class="success-message">
+                        <h3>Results Unlocked!</h3>
+                        <p>You're losing link equity from these dead pages. Export the list or fix them now.</p>
+                    </div>
+                    <style>
+                        /* Equal button heights for action buttons */
+                        .action-buttons-row .stButton > button,
+                        .action-buttons-row .stDownloadButton > button {
+                            height: 48px !important;
+                            min-height: 48px !important;
+                            padding: 0.5rem 1rem !important;
+                        }
+                    </style>
+                """, unsafe_allow_html=True)
+
+                # Action buttons row
+                st.markdown('<div class="action-buttons-row">', unsafe_allow_html=True)
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("🚀 Fix These Now", type="primary", use_container_width=True):
+                        st.query_params.clear()
+                        st.rerun()
+                with col2:
+                    # Generate CSV data
+                    csv_data = generate_csv_export(backlinks, results["domain"])
+                    st.download_button(
+                        label="📥 Export CSV",
+                        data=csv_data,
+                        file_name=f"{results['domain']}_broken_backlinks.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                # Full results table with pagination
+                total_backlinks = len(backlinks)
+                per_page = 10
+
+                # Initialize pagination state
+                if "backlinks_page" not in st.session_state:
+                    st.session_state.backlinks_page = 0
+
+                total_pages = (total_backlinks + per_page - 1) // per_page  # Ceiling division
+                current_page = st.session_state.backlinks_page
+
+                # Ensure current page is within bounds
+                if current_page >= total_pages:
+                    current_page = max(0, total_pages - 1)
+                    st.session_state.backlinks_page = current_page
+
+                start_idx = current_page * per_page
+                end_idx = min(start_idx + per_page, total_backlinks)
+
+                st.markdown(f"### All Broken Backlinks ({total_backlinks} total)", unsafe_allow_html=True)
+
+                # Show current page of results
+                for bl in backlinks[start_idx:end_idx]:
+                    st.markdown(render_backlink_card(bl), unsafe_allow_html=True)
+
+                # Pagination controls
+                if total_pages > 1:
+                    st.markdown(f"""
+                        <p style="text-align: center; color: #64748b; margin: 1rem 0 0.5rem 0;">
+                            Showing {start_idx + 1}-{end_idx} of {total_backlinks} backlinks
+                        </p>
+                    """, unsafe_allow_html=True)
+
+                    col_prev, col_page, col_next = st.columns([1, 2, 1])
+
+                    with col_prev:
+                        if current_page > 0:
+                            if st.button("← Previous", key="prev_page", use_container_width=True):
+                                st.session_state.backlinks_page = current_page - 1
+                                st.rerun()
+
+                    with col_page:
+                        st.markdown(f"""
+                            <p style="text-align: center; color: #0d9488; font-weight: 600; padding: 0.5rem 0;">
+                                Page {current_page + 1} of {total_pages}
+                            </p>
+                        """, unsafe_allow_html=True)
+
+                    with col_next:
+                        if current_page < total_pages - 1:
+                            if st.button("Next →", key="next_page", use_container_width=True):
+                                st.session_state.backlinks_page = current_page + 1
+                                st.rerun()
+
+                # Bottom CTA section
+                st.markdown("""
+                    <div style="background: linear-gradient(135deg, #f0fdfa 0%, #ecfeff 100%); border: 2px solid #14b8a6; border-radius: 16px; padding: 2rem; text-align: center; margin-top: 2rem;">
+                        <h3 style="color: #0f172a; margin-bottom: 0.75rem; font-size: 1.5rem;">Ready to reclaim this link equity?</h3>
+                        <p style="color: #64748b; margin-bottom: 1.5rem; line-height: 1.6;">
+                            Screaming Fixes connects to your WordPress site and creates redirects for these dead pages in minutes. No manual .htaccess editing. No plugins to configure.
+                        </p>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                if st.button("🔧 Open Screaming Fixes", type="primary", use_container_width=True, key="bottom_cta"):
+                    st.query_params.clear()
+                    st.rerun()
+
+                st.markdown("""
+                    <p style="text-align: center; color: #0d9488; font-weight: 500; margin-top: 1rem;">
+                        The SEO fixer that actually pushes changes to WordPress
+                    </p>
+                """, unsafe_allow_html=True)
 
     # Footer with navigation
     st.markdown("""
