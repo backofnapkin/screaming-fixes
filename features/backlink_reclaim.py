@@ -92,7 +92,8 @@ def load_scan_results(scan_results: Dict, domain: str):
 
     # Group backlinks by dead page (target_url path)
     grouped = {}
-    backlinks = scan_results.get('backlinks', [])
+    # Support both 'backlinks' and 'broken_backlinks' keys for compatibility
+    backlinks = scan_results.get('broken_backlinks') or scan_results.get('backlinks', [])
 
     for bl in backlinks:
         target_url = bl.get('target_url', '')
