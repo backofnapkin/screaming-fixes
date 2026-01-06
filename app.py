@@ -5126,6 +5126,7 @@ def main():
 if __name__ == "__main__":
     # Check for landing page routing
     feature = st.query_params.get("feature", "")
+    from_param = st.query_params.get("from", "")
 
     if feature == "reclaim":
         # Load the backlink reclaim landing page
@@ -5135,5 +5136,24 @@ if __name__ == "__main__":
         except ImportError as e:
             st.error(f"Landing page module not found: {e}")
             main()
+    elif from_param == "reclaim":
+        # Coming from landing page with scan data - go to main tool
+        # Clear the query param to avoid re-processing on refresh
+        st.query_params.clear()
+
+        # Initialize backlink reclaim state if needed
+        init_backlink_reclaim_state()
+
+        # Check if we have scan results loaded
+        has_br_data = st.session_state.get('br_grouped_pages') and len(st.session_state.br_grouped_pages) > 0
+
+        if has_br_data:
+            # Data is loaded, ensure we're on the backlink_reclaim task
+            st.session_state.current_task = 'backlink_reclaim'
+            st.session_state.task_type = 'backlink_reclaim'
+
+        # Run main app (will show backlink reclaim tab if data exists,
+        # or show scan input in the expander if no data)
+        main()
     else:
         main()

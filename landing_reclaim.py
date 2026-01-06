@@ -21,6 +21,7 @@ from config import (
 )
 from services.supabase_client import SupabaseClient
 from services.dataforseo_api import DataForSEOClient
+from features.backlink_reclaim import load_scan_results, init_backlink_reclaim_state
 
 
 def get_landing_css() -> str:
@@ -757,7 +758,28 @@ def render_landing_page():
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button("🚀 Fix These Now", type="primary", use_container_width=True):
+                        # Initialize backlink reclaim state
+                        init_backlink_reclaim_state()
+
+                        # Build scan results object for the fix workflow
+                        fix_scan_results = {
+                            'domain': results['domain'],
+                            'broken_backlinks': backlinks,
+                            'broken_count': results['broken_count'],
+                            'total_count': results['total_count'],
+                            'api_cost_cents': results.get('api_cost', 0),
+                        }
+
+                        # Load into br_ session state using the shared function
+                        load_scan_results(fix_scan_results, results['domain'])
+
+                        # Set current task to backlink_reclaim
+                        st.session_state.current_task = 'backlink_reclaim'
+                        st.session_state.task_type = 'backlink_reclaim'
+
+                        # Navigate to main tool with from=reclaim param
                         st.query_params.clear()
+                        st.query_params['from'] = 'reclaim'
                         st.rerun()
                 with col2:
                     # Generate CSV data
@@ -836,7 +858,28 @@ def render_landing_page():
                 """, unsafe_allow_html=True)
 
                 if st.button("🔧 Open Screaming Fixes", type="primary", use_container_width=True, key="bottom_cta"):
+                    # Initialize backlink reclaim state
+                    init_backlink_reclaim_state()
+
+                    # Build scan results object for the fix workflow
+                    fix_scan_results = {
+                        'domain': results['domain'],
+                        'broken_backlinks': backlinks,
+                        'broken_count': results['broken_count'],
+                        'total_count': results['total_count'],
+                        'api_cost_cents': results.get('api_cost', 0),
+                    }
+
+                    # Load into br_ session state using the shared function
+                    load_scan_results(fix_scan_results, results['domain'])
+
+                    # Set current task to backlink_reclaim
+                    st.session_state.current_task = 'backlink_reclaim'
+                    st.session_state.task_type = 'backlink_reclaim'
+
+                    # Navigate to main tool with from=reclaim param
                     st.query_params.clear()
+                    st.query_params['from'] = 'reclaim'
                     st.rerun()
 
                 st.markdown("""
