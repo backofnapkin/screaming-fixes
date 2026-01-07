@@ -96,6 +96,7 @@ def init_session_state():
 
         # Integrations panel state
         'show_integrations': False,  # Whether integrations panel is expanded
+        'scroll_to_integrations': False,  # Scroll to integrations section
 
         # Bulk AI analysis state
         'show_bulk_ai_modal': False,

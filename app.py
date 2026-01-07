@@ -3624,7 +3624,8 @@ def render_task_switcher():
 
     # Backlink Reclaim counts
     br_count = len(st.session_state.br_grouped_pages) if st.session_state.br_grouped_pages else 0
-    br_pending = br_count - len(st.session_state.br_approved_redirects) if br_count > 0 else 0
+    br_decisions = st.session_state.get('br_decisions', {})
+    br_pending = sum(1 for d in br_decisions.values() if not d.get('fix_type')) if br_decisions else br_count
 
     # Build options list
     options = []
@@ -5032,14 +5033,30 @@ def main():
     # Show integrations panel if requested or not all connected
     if st.session_state.show_integrations:
         render_integrations_panel(process_post_id_upload)
-    
-    # Always show upload section
-    render_upload_section()
-    
-    render_progress_indicator()
-    
-    # Initialize backlink reclaim state
+
+    # Initialize backlink reclaim state first (needed to check br_from_landing)
     init_backlink_reclaim_state()
+
+    # Check if user came from landing page with backlink data
+    # If so, skip the upload section to show their results directly
+    from_landing_with_data = (
+        st.session_state.get('br_from_landing', False) and
+        st.session_state.br_grouped_pages and
+        len(st.session_state.br_grouped_pages) > 0
+    )
+
+    if from_landing_with_data:
+        # Skip upload section - show a small toggle to bring it back
+        col1, col2, col3 = st.columns([2, 1, 2])
+        with col2:
+            if st.button("📤 Show Upload Section", use_container_width=True, key="show_upload_from_landing"):
+                st.session_state.br_from_landing = False
+                st.rerun()
+    else:
+        # Normal flow: always show upload section
+        render_upload_section()
+
+    render_progress_indicator()
 
     # Check state AFTER upload section (in case new file was just processed)
     has_broken_links = st.session_state.df is not None
@@ -5094,13 +5111,30 @@ def main():
 
         elif current_task == 'backlink_reclaim' and has_backlink_reclaim:
             # Backlink Reclaim workflow
+            # Add anchor div for scrolling from landing page
+            st.markdown('<div id="backlink-reclaim-section"></div>', unsafe_allow_html=True)
             st.markdown('<p class="section-header">🔙 Backlink Reclaim</p>', unsafe_allow_html=True)
-            # Get WordPress client if connected
-            wp_client = st.session_state.wp_client if st.session_state.wp_connected else None
+
+            # Auto-scroll to section if coming from landing page
+            if st.session_state.get('br_scroll_to_section'):
+                st.session_state.br_scroll_to_section = False
+                # Use components.html to execute JavaScript for scrolling
+                import streamlit.components.v1 as components
+                components.html("""
+                    <script>
+                        // Scroll to top of page to show the Backlink Reclaim section
+                        window.parent.document.querySelector('[data-testid="stAppViewContainer"]').scrollTo({
+                            top: 0,
+                            behavior: 'smooth'
+                        });
+                    </script>
+                """, height=0)
+            # Get API key for AI suggestions
+            api_key = st.session_state.ai_config.get('api_key') or st.session_state.anthropic_key
             render_backlink_fix_workflow(
                 scan_results=st.session_state.br_scan_results,
                 domain=st.session_state.br_domain,
-                wp_client=wp_client
+                api_key=api_key
             )
 
         else:
@@ -5142,16 +5176,28 @@ if __name__ == "__main__":
         # Run main app with the loaded data
         main()
     else:
-        # Check for landing page routing via query params
-        feature = st.query_params.get("feature", "")
-
-        if feature == "reclaim":
-            # Load the backlink reclaim landing page
-            try:
-                from landing_reclaim import render_landing_page
-                render_landing_page()
-            except ImportError as e:
-                st.error(f"Landing page module not found: {e}")
-                main()
-        else:
+        # Check if user is navigating FROM landing page to main app
+        # If br_from_landing is set, skip the landing page even if URL has ?feature=reclaim
+        if st.session_state.get('br_from_landing', False):
+            # User clicked "Fix These Now" from landing page - go to main app
             main()
+        else:
+            # Check for landing page routing via query params
+            # Use experimental API for older Streamlit versions
+            try:
+                feature = st.query_params.get("feature", "")
+            except AttributeError:
+                # Fallback for older Streamlit versions
+                query_params = st.experimental_get_query_params()
+                feature = query_params.get("feature", [""])[0]
+
+            if feature == "reclaim":
+                # Load the backlink reclaim landing page
+                try:
+                    from landing_reclaim import render_landing_page
+                    render_landing_page()
+                except ImportError as e:
+                    st.error(f"Landing page module not found: {e}")
+                    main()
+            else:
+                main()

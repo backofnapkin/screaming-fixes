@@ -13,6 +13,15 @@ import re
 import streamlit as st
 from urllib.parse import urlparse
 
+
+def clear_query_params():
+    """Clear query params with fallback for older Streamlit versions"""
+    try:
+        st.query_params.clear()
+    except AttributeError:
+        st.experimental_set_query_params()
+
+
 from config import (
     PRIMARY_TEAL,
     RECLAIM_TEASER_COUNT,
@@ -379,12 +388,21 @@ def get_client_ip() -> str:
 
 def get_utm_params() -> dict:
     """Extract UTM parameters from query string"""
-    params = st.query_params
-    return {
-        "utm_source": params.get("utm_source", ""),
-        "utm_medium": params.get("utm_medium", ""),
-        "utm_campaign": params.get("utm_campaign", "")
-    }
+    try:
+        params = st.query_params
+        return {
+            "utm_source": params.get("utm_source", ""),
+            "utm_medium": params.get("utm_medium", ""),
+            "utm_campaign": params.get("utm_campaign", "")
+        }
+    except AttributeError:
+        # Fallback for older Streamlit versions
+        params = st.experimental_get_query_params()
+        return {
+            "utm_source": params.get("utm_source", [""])[0],
+            "utm_medium": params.get("utm_medium", [""])[0],
+            "utm_campaign": params.get("utm_campaign", [""])[0]
+        }
 
 
 def render_backlink_card(backlink: dict, show_full: bool = True) -> str:
@@ -542,7 +560,7 @@ def render_landing_page():
         """, unsafe_allow_html=True)
 
         if st.button("🔧 Explore Screaming Fixes", type="primary", use_container_width=True, key="rate_limit_cta"):
-            st.query_params.clear()
+            clear_query_params()
             st.rerun()
 
     scan_clicked = st.button(
@@ -633,7 +651,7 @@ def render_landing_page():
             """, unsafe_allow_html=True)
 
             if st.button("🔧 Explore Screaming Fixes", type="primary", use_container_width=True):
-                st.query_params.clear()
+                clear_query_params()
                 st.rerun()
 
             st.markdown("""
@@ -779,9 +797,13 @@ def render_landing_page():
 
                         # Set flag to navigate to main tool on next rerun
                         st.session_state.navigate_to_fix_workflow = True
+                        # Also set flag to scroll to the backlink section
+                        st.session_state.br_scroll_to_section = True
+                        # Flag to indicate user came from landing page (hide upload section)
+                        st.session_state.br_from_landing = True
 
                         # Clear query params (removes ?feature=reclaim)
-                        st.query_params.clear()
+                        clear_query_params()
                         st.rerun()
                 with col2:
                     # Generate CSV data
@@ -881,9 +903,13 @@ def render_landing_page():
 
                     # Set flag to navigate to main tool on next rerun
                     st.session_state.navigate_to_fix_workflow = True
+                    # Also set flag to scroll to the backlink section
+                    st.session_state.br_scroll_to_section = True
+                    # Flag to indicate user came from landing page (hide upload section)
+                    st.session_state.br_from_landing = True
 
                     # Clear query params (removes ?feature=reclaim)
-                    st.query_params.clear()
+                    clear_query_params()
                     st.rerun()
 
                 st.markdown("""

@@ -309,6 +309,23 @@ def render_integrations_panel(process_post_id_upload: Callable):
     """
     status = get_integration_status()
 
+    # Add anchor for scroll-to functionality
+    st.markdown('<div id="integrations-panel"></div>', unsafe_allow_html=True)
+
+    # Check if we need to scroll to this section
+    if st.session_state.get('scroll_to_integrations', False):
+        st.markdown("""
+        <script>
+            // Scroll to integrations panel
+            const element = document.getElementById('integrations-panel');
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        </script>
+        """, unsafe_allow_html=True)
+        # Clear the flag
+        st.session_state.scroll_to_integrations = False
+
     # Header
     st.markdown("""
     <div style="background: linear-gradient(135deg, #f0fdfa 0%, #ecfeff 100%); padding: 1.25rem 1.5rem; border-radius: 12px; border: 1px solid #99f6e4; margin-top: 1rem; margin-bottom: 1rem;">
