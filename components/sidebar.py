@@ -14,6 +14,20 @@ try:
 except ImportError:
     WP_AVAILABLE = False
 
+# Optional DataForSEO client import
+try:
+    from services.dataforseo_api import DataForSEOClient
+    DATAFORSEO_AVAILABLE = True
+except ImportError:
+    DATAFORSEO_AVAILABLE = False
+
+# Optional backlink reclaim imports
+try:
+    from features.backlink_reclaim import init_backlink_reclaim_state, load_scan_results
+    BACKLINK_RECLAIM_AVAILABLE = True
+except ImportError:
+    BACKLINK_RECLAIM_AVAILABLE = False
+
 # Optional SEO service import
 try:
     from services.wordpress import SEOService, PluginDetector
@@ -187,11 +201,100 @@ def get_integration_status() -> Dict[str, any]:
 
 def render_feature_cards():
     """Render the What You Can Fix feature cards section"""
+
+    # =========================================================================
+    # "What You Can Fix" header at the top
+    # =========================================================================
     st.markdown("""
     <h3 style="text-align: center; color: #134e4a; font-weight: 600; margin-bottom: 1.25rem; font-size: 1.35rem;">
         What You Can Fix
     </h3>
     """, unsafe_allow_html=True)
+
+    # =========================================================================
+    # Featured: Backlink Reclaim section (below header, above cards)
+    # =========================================================================
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
+                border: 2px solid #14b8a6; border-radius: 12px; padding: 1.5rem;
+                margin-bottom: 1.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
+            <span style="font-size: 1.5rem;">🔙</span>
+            <span style="font-weight: 700; font-size: 1.25rem; color: #134e4a;">Backlink Reclaim</span>
+            <span style="background: #14b8a6; color: white; padding: 0.25rem 0.75rem;
+                        border-radius: 20px; font-size: 0.75rem; font-weight: 600;">
+                ⚡ No upload needed
+            </span>
+        </div>
+        <div style="color: #475569; font-size: 1rem;">
+            Find broken backlinks pointing to your 404 pages and fix them in minutes. Reclaim your lost link equity.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # URL input and scan button inline
+    col_input, col_btn = st.columns([3, 1])
+    with col_input:
+        domain_input = st.text_input(
+            "Enter your website URL",
+            placeholder="example.com",
+            key="quick_backlink_scan",
+            label_visibility="collapsed"
+        )
+    with col_btn:
+        scan_clicked = st.button("🔍 Scan Now", type="primary", use_container_width=True, key="quick_scan_btn")
+
+    # Handle scan
+    if scan_clicked and domain_input:
+        if DATAFORSEO_AVAILABLE and BACKLINK_RECLAIM_AVAILABLE:
+            # Clean domain input
+            clean_domain = domain_input.strip().lower()
+            clean_domain = clean_domain.replace("https://", "").replace("http://", "").replace("www.", "")
+            clean_domain = clean_domain.rstrip("/")
+
+            if not clean_domain or "." not in clean_domain:
+                st.error("Please enter a valid domain (e.g., example.com)")
+            else:
+                # Initialize backlink reclaim state
+                init_backlink_reclaim_state()
+
+                with st.spinner("Scanning backlinks... (this may take 30 seconds)"):
+                    try:
+                        client = DataForSEOClient()
+                        backlinks, broken_count, total_count, api_cost, error = client.get_broken_backlinks(clean_domain)
+
+                        if error:
+                            st.error(f"Scan failed: {error}")
+                        elif broken_count == 0:
+                            st.info(f"No broken backlinks found for {clean_domain}. Great news!")
+                        else:
+                            # Build scan results object
+                            scan_results = {
+                                'domain': clean_domain,
+                                'broken_backlinks': backlinks,
+                                'broken_count': broken_count,
+                                'total_count': total_count,
+                                'api_cost_cents': api_cost,
+                            }
+
+                            # Load into backlink reclaim state
+                            load_scan_results(scan_results, clean_domain)
+
+                            # Switch to backlink_reclaim task
+                            st.session_state.current_task = 'backlink_reclaim'
+                            st.session_state.task_type = 'backlink_reclaim'
+
+                            st.success(f"Found {broken_count} broken backlinks on {clean_domain}!")
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Error scanning domain: {str(e)}")
+        else:
+            st.error("Backlink scanning is not available. Please check your configuration.")
+    elif scan_clicked and not domain_input:
+        st.warning("Please enter a domain to scan")
+
+    # Add spacing before feature cards
+    st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
 
     # Get integration status
     status = get_integration_status()
