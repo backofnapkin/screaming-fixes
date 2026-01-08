@@ -206,7 +206,7 @@ def render_feature_cards():
     # "What You Can Fix" header at the top
     # =========================================================================
     st.markdown("""
-    <h3 style="text-align: center; color: #134e4a; font-weight: 600; margin-bottom: 1.25rem; font-size: 1.35rem;">
+    <h3 style="text-align: center; color: #134e4a; font-weight: 600; margin-bottom: 1.25rem; font-size: 1.7rem;">
         What You Can Fix
     </h3>
     """, unsafe_allow_html=True)
@@ -214,35 +214,36 @@ def render_feature_cards():
     # =========================================================================
     # Featured: Backlink Reclaim section (below header, above cards)
     # =========================================================================
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
-                border: 2px solid #14b8a6; border-radius: 12px; padding: 1.5rem;
-                margin-bottom: 1.5rem;">
+
+    # Use st.container with border to wrap everything including inputs
+    with st.container(border=True):
+        # Header
+        st.markdown("""
         <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
             <span style="font-size: 1.5rem;">🔙</span>
             <span style="font-weight: 700; font-size: 1.25rem; color: #134e4a;">Backlink Reclaim</span>
             <span style="background: #14b8a6; color: white; padding: 0.25rem 0.75rem;
                         border-radius: 20px; font-size: 0.75rem; font-weight: 600;">
-                ⚡ No upload needed
+                ⚡ Start here
             </span>
         </div>
-        <div style="color: #475569; font-size: 1rem;">
-            Find broken backlinks pointing to your 404 pages and fix them in minutes. Reclaim your lost link equity.
+        <div style="color: #475569; font-size: 0.95rem; text-align: left; margin-bottom: 1rem;">
+            Find broken backlinks pointing to your 404 pages and fix them in minutes. Reclaim dead backlinks and lost link equity. Enter your website URL below and click Scan Now to find your dead links and then fix them.
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    # URL input and scan button inline
-    col_input, col_btn = st.columns([3, 1])
-    with col_input:
-        domain_input = st.text_input(
-            "Enter your website URL",
-            placeholder="example.com",
-            key="quick_backlink_scan",
-            label_visibility="collapsed"
-        )
-    with col_btn:
-        scan_clicked = st.button("🔍 Scan Now", type="primary", use_container_width=True, key="quick_scan_btn")
+        # URL input and scan button inside the container
+        col_input, col_btn = st.columns([3, 1])
+        with col_input:
+            domain_input = st.text_input(
+                "Enter your website URL",
+                placeholder="example.com",
+                key="quick_backlink_scan",
+                label_visibility="collapsed"
+            )
+        with col_btn:
+            scan_clicked = st.button("🔍 Scan Now", type="primary", use_container_width=True, key="quick_scan_btn")
+
 
     # Handle scan
     if scan_clicked and domain_input:
@@ -293,9 +294,6 @@ def render_feature_cards():
     elif scan_clicked and not domain_input:
         st.warning("Please enter a domain to scan")
 
-    # Add spacing before feature cards
-    st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
-
     # Get integration status
     status = get_integration_status()
 
@@ -337,29 +335,19 @@ def render_feature_cards():
         """, unsafe_allow_html=True)
 
     with col3:
-        card_class = "ready" if image_alt_ready else "locked"
+        # Always use "ready" class for card background (green) for visual consistency
+        # But status badge shows actual state (ready vs locked)
         status_class = "ready" if image_alt_ready else "locked"
         status_text = "✅ Ready" if image_alt_ready else "🔒 Needs Setup"
 
-        if image_alt_ready:
-            st.markdown(f"""
-            <div class="feature-card {card_class}">
-                <div class="feature-card-icon">🖼️</div>
-                <div class="feature-card-title">Image Alt Text</div>
-                <div class="feature-card-desc">Add missing descriptions with AI</div>
-                <div class="feature-card-status {status_class}">{status_text}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            # Show locked card
-            st.markdown(f"""
-            <div class="feature-card {card_class}">
-                <div class="feature-card-icon">🖼️</div>
-                <div class="feature-card-title">Image Alt Text</div>
-                <div class="feature-card-desc">Add missing descriptions with AI</div>
-                <div class="feature-card-status {status_class}">{status_text}</div>
-            </div>
-            """, unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="feature-card ready">
+            <div class="feature-card-icon">🖼️</div>
+            <div class="feature-card-title">Image Alt Text</div>
+            <div class="feature-card-desc">Add missing descriptions with AI</div>
+            <div class="feature-card-status {status_class}">{status_text}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
     # Unlock message
     if not status['all_connected']:
