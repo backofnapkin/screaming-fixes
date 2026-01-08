@@ -54,16 +54,16 @@ def get_landing_css() -> str:
         /* Center content container */
         .block-container {
             max-width: 700px !important;
-            padding-top: 2rem !important;
+            padding-top: 1.2rem !important;
             padding-bottom: 2rem !important;
         }
 
         /* Logo/Brand header */
         .brand-header {
             text-align: center;
-            padding: 1rem 0 2rem 0;
+            padding: 0.5rem 0 1rem 0;
             border-bottom: 1px solid #e2e8f0;
-            margin-bottom: 2rem;
+            margin-bottom: 1rem;
         }
 
         .brand-logo {
@@ -79,11 +79,11 @@ def get_landing_css() -> str:
         /* Hero section */
         .hero-section {
             text-align: center;
-            padding: 2rem 0;
+            padding: 1rem 0;
         }
 
         .hero-title {
-            font-size: 2.5rem;
+            font-size: 2.75rem;
             font-weight: 700;
             color: #0f172a;
             margin-bottom: 1rem;
@@ -93,7 +93,7 @@ def get_landing_css() -> str:
         .hero-subtitle {
             font-size: 1.25rem;
             color: #64748b;
-            margin-bottom: 2rem;
+            margin-bottom: 1rem;
             line-height: 1.6;
         }
 
@@ -433,6 +433,72 @@ def render_backlink_card(backlink: dict, show_full: bool = True) -> str:
     """
 
 
+def group_backlinks_by_dead_page(backlinks: list) -> list:
+    """Group backlinks by dead page (target URL) and return sorted opportunities"""
+    dead_pages = {}
+    for bl in backlinks:
+        target = bl.get("target_url", "")
+        if not target:
+            continue
+        if target not in dead_pages:
+            dead_pages[target] = {
+                "dead_page": target,
+                "backlinks_count": 0,
+                "top_referrer": "",
+                "top_referrer_rank": 0,
+                "top_referrer_url": "",
+                "referrers": []
+            }
+        dead_pages[target]["backlinks_count"] += 1
+        dead_pages[target]["referrers"].append({
+            "domain": bl.get("referring_domain", ""),
+            "rank": bl.get("domain_rank", 0),
+            "url": bl.get("referring_url", "")
+        })
+
+        # Track top referrer by domain rank
+        if bl.get("domain_rank", 0) > dead_pages[target]["top_referrer_rank"]:
+            dead_pages[target]["top_referrer"] = bl.get("referring_domain", "")
+            dead_pages[target]["top_referrer_rank"] = bl.get("domain_rank", 0)
+            dead_pages[target]["top_referrer_url"] = bl.get("referring_url", "")
+
+    # Sort by backlinks count (descending)
+    opportunities = sorted(dead_pages.values(), key=lambda x: x["backlinks_count"], reverse=True)
+    return opportunities
+
+
+def render_opportunity_card(opportunity: dict) -> str:
+    """Render a single opportunity card (grouped by dead page)"""
+    dead_page = opportunity.get("dead_page", "")
+    if len(dead_page) > 55:
+        dead_page_display = dead_page[:55] + "..."
+    else:
+        dead_page_display = dead_page
+
+    backlinks_count = opportunity.get("backlinks_count", 0)
+    top_referrer = opportunity.get("top_referrer", "")
+    top_referrer_rank = opportunity.get("top_referrer_rank", 0)
+
+    return f"""
+    <div class="backlink-card">
+        <div class="backlink-target" style="font-size: 1rem; font-weight: 600; color: #dc2626; margin-bottom: 0.5rem;">
+            🔗 {dead_page_display}
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="background: #0d9488; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem; font-weight: 600;">
+                    {backlinks_count} backlink{'s' if backlinks_count != 1 else ''}
+                </span>
+            </div>
+            <div class="backlink-referrer" style="margin: 0;">
+                <span style="color: #64748b; font-size: 0.85rem;">Top: {top_referrer}</span>
+                <span class="backlink-rank">DR {top_referrer_rank}</span>
+            </div>
+        </div>
+    </div>
+    """
+
+
 def generate_csv_export(backlinks: list, domain: str) -> str:
     """Generate CSV export of broken backlinks"""
     import io
@@ -504,7 +570,7 @@ def render_landing_page():
     # Hero section
     st.markdown("""
         <div class="hero-section">
-            <h1 class="hero-title">Find Your Lost Backlinks and Fix Them in 5 Minutes</h1>
+            <h1 class="hero-title">Find Your Dead Backlinks and Fix Them in 5 Minutes</h1>
             <p class="hero-subtitle">
                 Discover <strong>broken backlinks</strong> pointing to your site, then reclaim them with Screaming Fixes.
                 Turn 404 errors into rankings and LLM visibility. <strong>This tool is FREE.</strong>
@@ -677,23 +743,27 @@ def render_landing_page():
 
             # Show teaser or full results
             if not st.session_state.email_captured:
-                # Show top 3 results
+                # Group backlinks by dead page to show opportunities
+                opportunities = group_backlinks_by_dead_page(backlinks)
+                total_opportunities = len(opportunities)
+
+                # Show top 3 opportunities (dead pages with most backlinks)
                 st.markdown("### Top Opportunities", unsafe_allow_html=True)
 
-                teaser_backlinks = backlinks[:RECLAIM_TEASER_COUNT]
-                for bl in teaser_backlinks:
-                    st.markdown(render_backlink_card(bl), unsafe_allow_html=True)
+                teaser_opportunities = opportunities[:3]
+                for opp in teaser_opportunities:
+                    st.markdown(render_opportunity_card(opp), unsafe_allow_html=True)
 
-                # Blurred preview of remaining
-                if len(backlinks) > RECLAIM_TEASER_COUNT:
-                    remaining_count = len(backlinks) - RECLAIM_TEASER_COUNT
+                # Blurred preview of remaining opportunities
+                if total_opportunities > 3:
+                    remaining_count = total_opportunities - 3
 
                     st.markdown('<div class="teaser-overlay">', unsafe_allow_html=True)
 
-                    # Show 2 blurred cards
+                    # Show 1-2 blurred cards
                     st.markdown('<div class="teaser-blur">', unsafe_allow_html=True)
-                    for bl in backlinks[RECLAIM_TEASER_COUNT:RECLAIM_TEASER_COUNT + 2]:
-                        st.markdown(render_backlink_card(bl), unsafe_allow_html=True)
+                    for opp in opportunities[3:5]:
+                        st.markdown(render_opportunity_card(opp), unsafe_allow_html=True)
                     st.markdown('</div>', unsafe_allow_html=True)
 
                     st.markdown('</div>', unsafe_allow_html=True)
@@ -701,7 +771,7 @@ def render_landing_page():
                 # Email capture CTA
                 st.markdown(f"""
                     <div class="teaser-cta">
-                        <div class="teaser-cta-title">Unlock All {results['broken_count']} Broken Backlinks</div>
+                        <div class="teaser-cta-title">Unlock All {total_opportunities} Dead Pages ({results['broken_count']} Backlinks)</div>
                     </div>
                 """, unsafe_allow_html=True)
 
@@ -926,7 +996,7 @@ def render_landing_page():
                 <a href="/" style="color: #64748b; text-decoration: none; font-weight: 500; transition: color 0.2s;">Home</a>
                 <a href="/#about" style="color: #64748b; text-decoration: none; font-weight: 500; transition: color 0.2s;">About</a>
                 <a href="/#instructions" style="color: #64748b; text-decoration: none; font-weight: 500; transition: color 0.2s;">Instructions</a>
-                <a href="mailto:contact@screamingfixes.com" style="color: #64748b; text-decoration: none; font-weight: 500; transition: color 0.2s;">Contact</a>
+                <a href="mailto:brett.lindenberg@gmail.com" style="color: #64748b; text-decoration: none; font-weight: 500; transition: color 0.2s;">Contact</a>
             </div>
             <p>🔧 Screaming Fixes - AI-Powered SEO Tools</p>
         </div>
