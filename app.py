@@ -5167,11 +5167,19 @@ def main():
                 import streamlit.components.v1 as components
                 components.html("""
                     <script>
-                        // Scroll to top of page to show the Backlink Reclaim section
-                        window.parent.document.querySelector('[data-testid="stAppViewContainer"]').scrollTo({
-                            top: 0,
-                            behavior: 'smooth'
-                        });
+                        // Find the backlink results section and scroll to it
+                        setTimeout(function() {
+                            var target = window.parent.document.getElementById('backlink-reclaim-section');
+                            if (target) {
+                                target.scrollIntoView({behavior: 'smooth', block: 'start'});
+                            } else {
+                                // Fallback: scroll to top of main content
+                                window.parent.document.querySelector('[data-testid="stAppViewContainer"]').scrollTo({
+                                    top: 0,
+                                    behavior: 'smooth'
+                                });
+                            }
+                        }, 100);
                     </script>
                 """, height=0)
             # Get API key for AI suggestions

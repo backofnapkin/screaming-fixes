@@ -325,28 +325,28 @@ def render_feature_cards():
             st.session_state.br_scan_just_completed = False
             st.session_state.br_scan_found_zero = False
         else:
-            # Results found - show success banner with link to results
+            # Results found - show success banner with button to scroll to results
             dead_pages = len(st.session_state.get('br_grouped_pages', {}))
             total_backlinks = st.session_state.get('br_scan_results', {}).get('broken_count', 0)
             st.markdown(f"""
             <div style="background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
                         border: 2px solid #14b8a6; border-radius: 12px; padding: 1rem 1.5rem;
                         margin: 1rem 0;">
-                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
-                    <div>
-                        <span style="font-size: 1.25rem; font-weight: 700; color: #0f766e;">
-                            ✅ Found {dead_pages} dead pages with {total_backlinks} backlinks at risk!
-                        </span>
-                    </div>
-                    <span style="background: #14b8a6; color: white; padding: 0.5rem 1rem;
-                                border-radius: 8px; font-weight: 600;">
-                        👇 Scroll down to view results
-                    </span>
-                </div>
+                <span style="font-size: 1.25rem; font-weight: 700; color: #0f766e;">
+                    ✅ Found {dead_pages} dead pages with {total_backlinks} backlinks at risk!
+                </span>
             </div>
             """, unsafe_allow_html=True)
-            # Clear the flag
-            st.session_state.br_scan_just_completed = False
+
+            # Button to scroll to results
+            if st.button("👇 View Results & Fix Now", type="primary", use_container_width=True, key="scroll_to_results_btn"):
+                st.session_state.br_should_scroll = True
+                st.session_state.br_scan_just_completed = False
+                st.rerun()
+
+            # Clear the flag if not clicking button
+            if not st.session_state.get('br_should_scroll'):
+                st.session_state.br_scan_just_completed = False
 
     # Get integration status
     status = get_integration_status()
