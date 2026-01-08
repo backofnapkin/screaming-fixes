@@ -5132,6 +5132,19 @@ def main():
         elif current_task == 'image_alt_text' and has_image_alt_text:
             # Image Alt Text workflow
             st.markdown('<p class="section-header">🖼️ Image Alt Text</p>', unsafe_allow_html=True)
+
+            # Show guidance box based on WordPress connection status
+            if not st.session_state.get('wp_connected'):
+                st.info("""
+**📍 How to fix missing alt text:**
+
+1. **Set alt text below** → Click on each image row to add alt text manually or get AI suggestion
+2. **Connect WordPress** → Click on Connect to WordPress below to connect your site
+3. **Apply fixes** → Click "Publish to WordPress" to update all images automatically
+                """)
+            else:
+                st.success("✅ WordPress connected. Set alt text below, then click 'Publish to WordPress' when ready.")
+
             render_iat_metrics()
             st.markdown("---")
             render_iat_spreadsheet()
