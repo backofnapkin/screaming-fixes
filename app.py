@@ -855,8 +855,6 @@ def render_upload_section():
                 except Exception as e:
                     st.error(f"Error scanning domain: {str(e)}")
 
-        # Note about DataForSEO
-        st.caption("Powered by DataForSEO API. Uses demo data if no API credentials are configured.")
 
     uploaded = st.file_uploader(
         "Upload your Screaming Frog CSV",

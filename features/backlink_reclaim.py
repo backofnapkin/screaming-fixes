@@ -22,8 +22,11 @@ from config import AGENT_MODE_API_KEY
 try:
     from anthropic import Anthropic
     ANTHROPIC_AVAILABLE = True
-except ImportError:
+except Exception as e:
     ANTHROPIC_AVAILABLE = False
+    ANTHROPIC_IMPORT_ERROR = str(e)
+else:
+    ANTHROPIC_IMPORT_ERROR = ""
 
 try:
     from services.wordpress import SEOService, NoCapablePluginError
@@ -169,10 +172,14 @@ def get_redirect_suggestion(
         api_key: Anthropic API key
 
     Returns:
-        Dict with 'target' (suggested path) and 'notes'
+        Dict with 'target' (suggested path), 'notes', and 'error' (if failed)
     """
     if not ANTHROPIC_AVAILABLE:
-        return {'target': '', 'notes': 'Anthropic library not installed.'}
+        error_detail = ANTHROPIC_IMPORT_ERROR if ANTHROPIC_IMPORT_ERROR else 'Unknown import error'
+        return {'target': '', 'notes': '', 'error': f'Anthropic library error: {error_detail}'}
+
+    if not api_key:
+        return {'target': '', 'notes': '', 'error': 'Claude API key not configured. Add your key in the Integrations sidebar.'}
 
     # Track the request
     track_event("backlink_redirect_suggestion", {
@@ -236,15 +243,25 @@ Only output the JSON."""
                     target = '/' + target
                 return {
                     'target': target,
-                    'notes': result.get('notes', 'No explanation provided.')
+                    'notes': result.get('notes', 'No explanation provided.'),
+                    'error': ''
                 }
         except json.JSONDecodeError:
             pass
 
-        return {'target': '', 'notes': result_text[:150] if result_text else 'Could not parse response.'}
+        return {'target': '', 'notes': '', 'error': f'Could not parse AI response: {result_text[:100]}'}
 
     except Exception as e:
-        return {'target': '', 'notes': f'Error: {str(e)[:100]}'}
+        error_str = str(e)
+        # Provide helpful error messages
+        if 'authentication' in error_str.lower() or 'api key' in error_str.lower() or '401' in error_str:
+            return {'target': '', 'notes': '', 'error': 'Invalid API key. Check your Claude API key in Integrations.'}
+        elif 'rate limit' in error_str.lower() or '429' in error_str:
+            return {'target': '', 'notes': '', 'error': 'Rate limit exceeded. Please wait a moment and try again.'}
+        elif 'insufficient' in error_str.lower() or 'credit' in error_str.lower():
+            return {'target': '', 'notes': '', 'error': 'Insufficient API credits. Check your Anthropic account.'}
+        else:
+            return {'target': '', 'notes': '', 'error': f'API error: {error_str[:150]}'}
 
 
 # =============================================================================
@@ -329,7 +346,8 @@ def get_fix_counts() -> Dict[str, int]:
     """Get counts of items by fix status"""
     decisions = st.session_state.br_decisions
     counts = {
-        'redirect': 0,
+        'redirect': 0,           # Redirects ready to submit (not yet submitted)
+        'redirect_submitted': 0,  # Already submitted redirects
         'ignore': 0,
         'restore': 0,
         'pending': 0,
@@ -337,8 +355,13 @@ def get_fix_counts() -> Dict[str, int]:
     }
     for decision in decisions.values():
         fix_type = decision.get('fix_type')
+        is_submitted = decision.get('submitted', False)
+
         if fix_type == 'redirect':
-            counts['redirect'] += 1
+            if is_submitted:
+                counts['redirect_submitted'] += 1
+            else:
+                counts['redirect'] += 1
         elif fix_type == 'ignore':
             counts['ignore'] += 1
         elif fix_type == 'restore':
@@ -602,8 +625,8 @@ def render_inline_edit(path: str, info: Dict, decision: Dict, domain: str, api_k
         else:
             st.markdown(f"<span style='color: #64748b; font-size: 0.8rem;'>📊 <strong>{info['count']}</strong> backlink(s) pointing to this dead page</span>", unsafe_allow_html=True)
 
-        # Quick action buttons row
-        action_cols = st.columns([1, 1, 3])
+        # Quick action buttons row: Ignore | AI Suggestion | Status area
+        action_cols = st.columns([1, 1.5, 2.5])
 
         with action_cols[0]:
             if st.button("⏭️ Ignore", key=f"br_quick_ignore_{path}", use_container_width=True,
@@ -615,34 +638,49 @@ def render_inline_edit(path: str, info: Dict, decision: Dict, domain: str, api_k
                 st.rerun()
 
         with action_cols[1]:
-            # AI suggestion button - shows inline key input if no API key
-            if st.session_state.get(processing_key, False):
-                st.spinner("🤖...")
+            # AI suggestion button
+            if api_key:
+                ai_clicked = st.button("🤖 AI Suggestion", key=f"br_quick_ai_{path}", use_container_width=True,
+                            help="Get AI redirect suggestion")
             else:
-                if api_key:
-                    if st.button("🤖 Get AI", key=f"br_quick_ai_{path}", use_container_width=True,
-                                help="Get AI redirect suggestion"):
-                        st.session_state[processing_key] = True
-                        st.rerun()
-                else:
-                    st.button("🤖 Get AI", key=f"br_quick_ai_{path}", use_container_width=True,
-                             disabled=True, help="Add API key in Integrations first")
+                ai_clicked = False
+                st.button("🤖 AI Suggestion", key=f"br_quick_ai_{path}", use_container_width=True,
+                         disabled=True, help="Add API key in Integrations first")
 
-        # Process AI suggestion if triggered
-        if st.session_state.get(processing_key, False) and api_key:
-            with st.spinner("🤖 Getting AI suggestion..."):
+        with action_cols[2]:
+            # Status messages appear here, to the right of the button
+            if api_key and ai_clicked:
+                import random
+
+                status_messages = [
+                    "🔍 Searching for replacement...",
+                    "🧠 Analyzing page content...",
+                    "🔗 Finding best match...",
+                    "💭 Evaluating options...",
+                    "⚡ Processing results...",
+                    "🎯 Making final decision...",
+                ]
+
+                status_placeholder = st.empty()
+                status_placeholder.markdown(f"<span style='color: #0d9488; font-size: 0.85rem;'>{random.choice(status_messages)}</span>", unsafe_allow_html=True)
+
+                # Make the API call
                 result = get_redirect_suggestion(
                     path, domain, info.get('anchor_texts', []), api_key
                 )
-                if result.get('target'):
+
+                status_placeholder.empty()
+
+                if result.get('error'):
+                    st.markdown(f"<span style='color: #dc2626; font-size: 0.85rem;'>❌ {result['error'][:60]}</span>", unsafe_allow_html=True)
+                elif result.get('target'):
                     decisions[path]['redirect_target'] = result['target']
                     decisions[path]['ai_suggested'] = True
                     decisions[path]['ai_notes'] = result.get('notes', '')
-                    st.toast(f"🤖 AI suggests: {result['target']}", icon="🤖")
+                    st.markdown(f"<span style='color: #059669; font-size: 0.85rem;'>✅ Found match!</span>", unsafe_allow_html=True)
+                    st.rerun()
                 else:
-                    st.toast(f"AI couldn't find a suggestion", icon="⚠️")
-                st.session_state[processing_key] = False
-                st.rerun()
+                    st.markdown("<span style='color: #d97706; font-size: 0.85rem;'>⚠️ No match found</span>", unsafe_allow_html=True)
 
         # Show AI suggestion if available - compact
         if actual_decision.get('ai_suggested') and actual_decision.get('redirect_target'):
@@ -705,17 +743,26 @@ def render_apply_section():
 
     st.markdown("---")
 
-    # Summary of decisions
+    # Build summary items dynamically
+    summary_items = []
+    if counts['redirect'] > 0:
+        summary_items.append(f"<span style='color: #059669;'><strong>{counts['redirect']}</strong> redirects to create</span>")
+    if counts['redirect_submitted'] > 0:
+        summary_items.append(f"<span style='color: #0d9488;'>✅ <strong>{counts['redirect_submitted']}</strong> already created</span>")
+    if counts['restore'] > 0:
+        summary_items.append(f"<span style='color: #8b5cf6;'><strong>{counts['restore']}</strong> to restore</span>")
+    if counts['ignore'] > 0:
+        summary_items.append(f"<span style='color: #64748b;'><strong>{counts['ignore']}</strong> ignored</span>")
+    if counts['pending'] > 0:
+        summary_items.append(f"<span style='color: #94a3b8;'><strong>{counts['pending']}</strong> pending</span>")
+
     st.markdown(f"""
     <div style="background: linear-gradient(135deg, #f0fdfa 0%, #ecfeff 100%); padding: 1rem; border-radius: 8px; border: 1px solid #99f6e4; margin-bottom: 1rem;">
         <div style="font-size: 1.1rem; font-weight: 600; color: #134e4a; margin-bottom: 0.5rem;">
             📊 Fix Summary
         </div>
-        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
-            <span style="color: #059669; font-size: 0.9rem;"><strong>{counts['redirect']}</strong> redirects to create</span>
-            <span style="color: #8b5cf6; font-size: 0.9rem;"><strong>{counts['restore']}</strong> to restore</span>
-            <span style="color: #64748b; font-size: 0.9rem;"><strong>{counts['ignore']}</strong> ignored</span>
-            <span style="color: #94a3b8; font-size: 0.9rem;"><strong>{counts['pending']}</strong> pending</span>
+        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; font-size: 0.9rem;">
+            {' '.join(summary_items)}
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -850,31 +897,45 @@ def create_redirects_via_plugin():
                 'error': str(e)
             })
 
-    st.session_state.br_completed_redirects = completed
-    st.session_state.br_failed_redirects = failed
+    # Append to existing completed/failed lists (for multiple batches)
+    existing_completed = st.session_state.get('br_completed_redirects', [])
+    existing_failed = st.session_state.get('br_failed_redirects', [])
+    st.session_state.br_completed_redirects = existing_completed + completed
+    st.session_state.br_failed_redirects = existing_failed + failed
     st.session_state.br_workflow_complete = True
     st.session_state.br_processing = False
+
+    # Mark the created redirects as "submitted" so they don't show as pending
+    for source_path in [r['source'] for r in completed]:
+        if source_path in decisions:
+            decisions[source_path]['submitted'] = True
 
     progress_bar.empty()
     status_text.empty()
     st.rerun()
 
 
-def render_success_state():
-    """Render the success state after redirects are created"""
-    completed = st.session_state.br_completed_redirects
-    failed = st.session_state.br_failed_redirects
+def render_success_state(api_key: str = None):
+    """Render the success state after redirects are created, with option to continue"""
+    completed = st.session_state.get('br_completed_redirects', [])
+    failed = st.session_state.get('br_failed_redirects', [])
     domain = st.session_state.br_domain
     decisions = st.session_state.br_decisions
     grouped_pages = st.session_state.br_grouped_pages
 
+    # Get counts for remaining items
+    counts = get_fix_counts()
+    remaining_pending = counts['pending']
+
     if completed:
         handler = completed[0].get('handler', 'SEO plugin') if completed else 'SEO plugin'
+        total_created = len(completed)
+
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border: 2px solid #6ee7b7; border-radius: 12px; padding: 1.5rem; text-align: center; margin-bottom: 1rem;">
             <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎉</div>
             <div style="font-size: 1.25rem; font-weight: 600; color: #065f46; margin-bottom: 0.5rem;">
-                Created {len(completed)} Redirect{'s' if len(completed) != 1 else ''} via {handler}
+                Created {total_created} Redirect{'s' if total_created != 1 else ''} via {handler}
             </div>
             <div style="font-size: 0.95rem; color: #047857;">
                 Your broken backlinks are now being fixed!
@@ -883,7 +944,7 @@ def render_success_state():
         """, unsafe_allow_html=True)
 
         # List created redirects
-        with st.expander(f"View {len(completed)} Created Redirects", expanded=False):
+        with st.expander(f"View {total_created} Created Redirects", expanded=False):
             for r in completed:
                 st.markdown(f"✅ `{r['source']}` → `{r['target']}`")
 
@@ -893,18 +954,33 @@ def render_success_state():
             for r in failed:
                 st.markdown(f"❌ `{r['source']}`: {r['error']}")
 
-    # Actions
+    # Show remaining count and continue button
+    if remaining_pending > 0:
+        st.markdown(f"""
+        <div style="background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 0.75rem 1rem; margin: 1rem 0;">
+            <span style="color: #92400e; font-size: 0.95rem;">
+                📋 <strong>{remaining_pending}</strong> dead page{'s' if remaining_pending != 1 else ''} still need{'s' if remaining_pending == 1 else ''} fixes
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Action buttons
     col1, col2 = st.columns(2)
+
     with col1:
-        if st.button("🔄 Scan Another Domain", use_container_width=True, type="primary"):
-            reset_backlink_reclaim_state()
-            st.rerun()
+        if remaining_pending > 0:
+            if st.button("➕ Fix More Links", use_container_width=True, type="primary"):
+                # Clear the workflow complete flag but keep everything else
+                st.session_state.br_workflow_complete = False
+                st.rerun()
+        else:
+            st.markdown("<span style='color: #059669; font-size: 0.9rem;'>✅ All pages fixed!</span>", unsafe_allow_html=True)
 
     with col2:
-        # Still offer export even after success
+        # Export results
         csv_data = generate_csv_export(decisions, domain, grouped_pages)
         st.download_button(
-            "📥 Export Results CSV",
+            "📥 Export CSV",
             csv_data,
             file_name=f"{domain}_redirects_results.csv",
             mime="text/csv",
