@@ -761,34 +761,54 @@ def render_header():
 
 def render_upload_section():
     """Render the CSV upload section - always visible with file status cards"""
+    # Add anchor for scrolling from feature cards
+    st.markdown('<div id="upload-section"></div>', unsafe_allow_html=True)
     st.markdown('<p class="section-header">📤 Upload Reports</p>', unsafe_allow_html=True)
-    
+
+    # Handle scroll to upload section
+    if st.session_state.get('scroll_to_upload'):
+        import streamlit.components.v1 as components
+        components.html("""
+            <script>
+                setTimeout(function() {
+                    var target = window.parent.document.getElementById('upload-section');
+                    if (target) {
+                        target.scrollIntoView({behavior: 'smooth', block: 'start'});
+                    }
+                }, 100);
+            </script>
+        """, height=0)
+        st.session_state.scroll_to_upload = False
+
     # Check current state
     has_post_ids = st.session_state.post_id_file_uploaded or st.session_state.has_post_ids
     post_id_count = len(st.session_state.post_id_cache)
     has_broken_links = st.session_state.df is not None
     has_redirect_chains = st.session_state.rc_df is not None
     has_image_alt_text = st.session_state.iat_df is not None
-    
+
+    # Check which expander should be expanded based on session state
+    expand_upload = st.session_state.get('expand_upload', None)
+
     st.markdown("""
     Export a report from Screaming Frog and upload it here. We'll auto-detect the file type.
     """)
-    
-    with st.expander("🔗 Broken Links — How to export", expanded=False):
+
+    with st.expander("🔗 Broken Links — How to export", expanded=(expand_upload == 'broken_links')):
         st.markdown("""
         1. Run a crawl in Screaming Frog
         2. Go to **Bulk Export → Response Codes → Client Error (4xx) → Inlinks**
         3. Save and upload the CSV
         """)
-    
-    with st.expander("🔄 Redirect Chains — How to export", expanded=False):
+
+    with st.expander("🔄 Redirect Chains — How to export", expanded=(expand_upload == 'redirect_chains')):
         st.markdown("""
         1. Run a crawl in Screaming Frog
         2. Go to **Reports → Redirects → All Redirects**
         3. Save and upload the CSV
         """)
-    
-    with st.expander("🖼️ Image Alt Text — How to export", expanded=False):
+
+    with st.expander("🖼️ Image Alt Text — How to export", expanded=(expand_upload == 'image_alt_text')):
         st.markdown("""
         1. Run a crawl in Screaming Frog
         2. Go to **Bulk Export → Images → All Image Inlinks**
@@ -796,6 +816,10 @@ def render_upload_section():
 
         *Requires all integrations to be connected (Post IDs + AI + WordPress)*
         """)
+
+    # Clear the expand_upload state after rendering so it doesn't persist
+    if expand_upload:
+        st.session_state.expand_upload = None
 
     # Backlink Reclaim scan section
     with st.expander("🔙 Backlink Reclaim — Scan for broken backlinks", expanded=False):

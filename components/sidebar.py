@@ -365,10 +365,14 @@ def render_feature_cards():
         status_class = "ready" if broken_links_ready else "locked"
         status_text = "✅ Ready" if broken_links_ready else "🔒 Needs Setup"
 
+        # Make card clickable - scrolls to upload section and expands the relevant expander
+        if st.button("🔗 Broken Links", key="card_broken_links", use_container_width=True, help="Click to see how to export"):
+            st.session_state.expand_upload = 'broken_links'
+            st.session_state.scroll_to_upload = True
+            st.rerun()
+
         st.markdown(f"""
-        <div class="feature-card {card_class}">
-            <div class="feature-card-icon">🔗</div>
-            <div class="feature-card-title">Broken Links</div>
+        <div class="feature-card {card_class}" style="margin-top: -0.5rem;">
             <div class="feature-card-desc">Find and fix 404s across your entire site</div>
             <div class="feature-card-status {status_class}">{status_text}</div>
         </div>
@@ -379,10 +383,14 @@ def render_feature_cards():
         status_class = "ready" if redirect_chains_ready else "locked"
         status_text = "✅ Ready" if redirect_chains_ready else "🔒 Needs Setup"
 
+        # Make card clickable - scrolls to upload section and expands the relevant expander
+        if st.button("🔄 Redirect Chains", key="card_redirect_chains", use_container_width=True, help="Click to see how to export"):
+            st.session_state.expand_upload = 'redirect_chains'
+            st.session_state.scroll_to_upload = True
+            st.rerun()
+
         st.markdown(f"""
-        <div class="feature-card {card_class}">
-            <div class="feature-card-icon">🔄</div>
-            <div class="feature-card-title">Redirect Chains</div>
+        <div class="feature-card {card_class}" style="margin-top: -0.5rem;">
             <div class="feature-card-desc">Update outdated URLs to final destinations</div>
             <div class="feature-card-status {status_class}">{status_text}</div>
         </div>
@@ -394,10 +402,14 @@ def render_feature_cards():
         status_class = "ready" if image_alt_ready else "locked"
         status_text = "✅ Ready" if image_alt_ready else "🔒 Needs Setup"
 
+        # Make card clickable - scrolls to upload section and expands the relevant expander
+        if st.button("🖼️ Image Alt Text", key="card_image_alt", use_container_width=True, help="Click to see how to export"):
+            st.session_state.expand_upload = 'image_alt_text'
+            st.session_state.scroll_to_upload = True
+            st.rerun()
+
         st.markdown(f"""
-        <div class="feature-card ready">
-            <div class="feature-card-icon">🖼️</div>
-            <div class="feature-card-title">Image Alt Text</div>
+        <div class="feature-card ready" style="margin-top: -0.5rem;">
             <div class="feature-card-desc">Add missing descriptions with AI</div>
             <div class="feature-card-status {status_class}">{status_text}</div>
         </div>
