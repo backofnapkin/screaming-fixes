@@ -734,17 +734,17 @@ def render_nav():
 def render_header():
     """Render the header and introduction"""
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #f0fdfa 0%, #ecfeff 50%, #f0f9ff 100%); 
-                padding: 1.75rem 2rem; 
-                border-radius: 16px; 
+    <div style="background: linear-gradient(135deg, #f0fdfa 0%, #ecfeff 50%, #f0f9ff 100%);
+                padding: 2rem 2rem;
+                border-radius: 16px;
                 margin: 0 0 1.5rem 0;
-                border: 1px solid #99f6e4;">
-        <p style="font-size: 1.15rem; line-height: 1.75; color: #134e4a; margin: 0;">
-            <strong style="color: #0d9488;">If you're an SEO or manage WordPress websites, you already use Screaming Frog.</strong><br><br>
-            But running audits is the easy part. <em>Actually fixing</em> hundreds of broken links and redirect chains? That's where hours disappear.<br><br>
-            <strong style="color: #0d9488;">Work smarter.</strong> Upload your CSV file directly from Screaming Frog, review each broken link, and decide: remove it, replace it, or let AI suggest a fix.<br><br>
-            Then the real power kicks in — Screaming Fixes connects to your WordPress site and applies every approved fix automatically. No more logging into each post. No more clicking publish.<br><br>
-            This isn't just another audit tool. <strong style="color: #0d9488;">This one actually gets the work done.</strong> Export a CSV or JSON to share your updates with clients.
+                border: 1px solid #99f6e4;
+                text-align: center;">
+        <h1 style="font-size: 2rem; font-weight: 700; color: #134e4a; margin: 0 0 0.75rem 0; line-height: 1.3;">
+            Finding SEO problems is easy. Fixing them sucks.
+        </h1>
+        <p style="font-size: 1.15rem; color: #0d9488; margin: 0; line-height: 1.6;">
+            Broken links. Redirect chains. Dead backlinks. Screaming Fixes pushes every approved fix to WordPress. All at once.
         </p>
     </div>
     """, unsafe_allow_html=True)
