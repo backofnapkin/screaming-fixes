@@ -83,7 +83,7 @@ def get_landing_css() -> str:
         }
 
         .hero-title {
-            font-size: 2.75rem;
+            font-size: 3.15rem;
             font-weight: 700;
             color: #0f172a;
             margin-bottom: 1rem;
@@ -91,7 +91,7 @@ def get_landing_css() -> str:
         }
 
         .hero-subtitle {
-            font-size: 1.25rem;
+            font-size: 1.45rem;
             color: #64748b;
             margin-bottom: 1rem;
             line-height: 1.6;
@@ -139,6 +139,31 @@ def get_landing_css() -> str:
             background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%) !important;
             box-shadow: 0 4px 12px rgba(20, 184, 166, 0.35) !important;
             transform: translateY(-1px);
+        }
+
+        /* Shimmer animation for scan button */
+        @keyframes shimmer {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+        }
+
+        .shimmer-btn .stButton > button[kind="primary"] {
+            background: linear-gradient(
+                90deg,
+                #14b8a6 0%,
+                #14b8a6 40%,
+                #5eead4 50%,
+                #14b8a6 60%,
+                #14b8a6 100%
+            ) !important;
+            background-size: 200% auto !important;
+            animation: shimmer 3s ease-in-out infinite !important;
+        }
+
+        .shimmer-btn .stButton > button[kind="primary"]:hover {
+            animation: none !important;
+            background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%) !important;
+            background-size: 100% auto !important;
         }
 
         /* Download button styling to match primary buttons */
@@ -444,59 +469,92 @@ def group_backlinks_by_dead_page(backlinks: list) -> list:
             dead_pages[target] = {
                 "dead_page": target,
                 "backlinks_count": 0,
-                "top_referrer": "",
-                "top_referrer_rank": 0,
-                "top_referrer_url": "",
-                "referrers": []
+                "referrers_by_domain": {}  # domain -> {rank, link_count}
             }
         dead_pages[target]["backlinks_count"] += 1
-        dead_pages[target]["referrers"].append({
-            "domain": bl.get("referring_domain", ""),
-            "rank": bl.get("domain_rank", 0),
-            "url": bl.get("referring_url", "")
-        })
 
-        # Track top referrer by domain rank
-        if bl.get("domain_rank", 0) > dead_pages[target]["top_referrer_rank"]:
-            dead_pages[target]["top_referrer"] = bl.get("referring_domain", "")
-            dead_pages[target]["top_referrer_rank"] = bl.get("domain_rank", 0)
-            dead_pages[target]["top_referrer_url"] = bl.get("referring_url", "")
+        # Aggregate by referring domain
+        domain = bl.get("referring_domain", "")
+        rank = bl.get("domain_rank", 0)
+        if domain:
+            if domain not in dead_pages[target]["referrers_by_domain"]:
+                dead_pages[target]["referrers_by_domain"][domain] = {
+                    "rank": rank,
+                    "link_count": 0
+                }
+            dead_pages[target]["referrers_by_domain"][domain]["link_count"] += 1
+            # Update rank if higher (in case of multiple links from same domain)
+            if rank > dead_pages[target]["referrers_by_domain"][domain]["rank"]:
+                dead_pages[target]["referrers_by_domain"][domain]["rank"] = rank
 
-    # Sort by backlinks count (descending)
-    opportunities = sorted(dead_pages.values(), key=lambda x: x["backlinks_count"], reverse=True)
+    # Process each dead page to create sorted referrer list
+    for page_data in dead_pages.values():
+        referrers_list = [
+            {"domain": domain, "rank": info["rank"], "link_count": info["link_count"]}
+            for domain, info in page_data["referrers_by_domain"].items()
+        ]
+        # Sort by DR (rank) descending
+        referrers_list.sort(key=lambda x: x["rank"], reverse=True)
+        page_data["referrers"] = referrers_list
+        page_data["unique_domains"] = len(referrers_list)
+        # Calculate max DR for sorting opportunities
+        page_data["max_dr"] = referrers_list[0]["rank"] if referrers_list else 0
+
+    # Sort by max DR (highest value domains first), then by backlink count
+    opportunities = sorted(dead_pages.values(), key=lambda x: (x["max_dr"], x["backlinks_count"]), reverse=True)
     return opportunities
 
 
 def render_opportunity_card(opportunity: dict) -> str:
-    """Render a single opportunity card (grouped by dead page)"""
+    """Render a single opportunity card emphasizing referring domains"""
     dead_page = opportunity.get("dead_page", "")
-    if len(dead_page) > 55:
-        dead_page_display = dead_page[:55] + "..."
-    else:
-        dead_page_display = dead_page
-
     backlinks_count = opportunity.get("backlinks_count", 0)
-    top_referrer = opportunity.get("top_referrer", "")
-    top_referrer_rank = opportunity.get("top_referrer_rank", 0)
+    referrers = opportunity.get("referrers", [])
+    unique_domains = opportunity.get("unique_domains", 0)
 
-    return f"""
-    <div class="backlink-card">
-        <div class="backlink-target" style="font-size: 1rem; font-weight: 600; color: #dc2626; margin-bottom: 0.5rem;">
-            🔗 {dead_page_display}
-        </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <span style="background: #0d9488; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem; font-weight: 600;">
-                    {backlinks_count} backlink{'s' if backlinks_count != 1 else ''}
-                </span>
-            </div>
-            <div class="backlink-referrer" style="margin: 0;">
-                <span style="color: #64748b; font-size: 0.85rem;">Top: {top_referrer}</span>
-                <span class="backlink-rank">DR {top_referrer_rank}</span>
-            </div>
-        </div>
-    </div>
-    """
+    # Extract just the path from the dead page URL for cleaner display
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(dead_page)
+        dead_page_path = parsed.path or "/"
+        if len(dead_page_path) > 45:
+            dead_page_path = dead_page_path[:45] + "..."
+    except Exception:
+        dead_page_path = dead_page[:50] + "..." if len(dead_page) > 50 else dead_page
+
+    # Build the referrer list HTML (show top 3 domains)
+    referrer_items = []
+    for ref in referrers[:3]:
+        domain = ref.get("domain", "")
+        rank = ref.get("rank", 0)
+        link_count = ref.get("link_count", 1)
+        link_text = f"{link_count} link{'s' if link_count != 1 else ''}"
+        referrer_items.append(
+            f'<div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0;">'
+            f'<span style="color: #475569; margin-right: 0.25rem;">•</span>'
+            f'<span style="font-weight: 600; color: #0f172a;">{domain}</span>'
+            f'<span style="background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%); color: white; font-size: 0.75rem; font-weight: 600; padding: 0.2rem 0.4rem; border-radius: 4px; margin-left: 0.25rem;">DR {rank}</span>'
+            f'<span style="color: #64748b; font-size: 0.85rem; margin-left: 0.25rem;">— {link_text}</span>'
+            f'</div>'
+        )
+
+    referrers_html = "".join(referrer_items)
+
+    # Show "+X more" if there are additional domains
+    more_html = ""
+    if unique_domains > 3:
+        more_count = unique_domains - 3
+        more_html = f'<div style="color: #64748b; font-size: 0.85rem; padding-left: 1rem; margin-top: 0.25rem;">+ {more_count} more site{"s" if more_count != 1 else ""}</div>'
+
+    # Build complete card HTML as single string
+    card_html = f'''<div class="backlink-card">
+<div style="font-size: 0.95rem; color: #dc2626; font-weight: 600; margin-bottom: 0.75rem;">🔗 {dead_page_path} <span style="font-weight: 400; color: #94a3b8;">is broken</span></div>
+<div style="font-size: 0.85rem; color: #64748b; margin-bottom: 0.5rem;">You're losing links from:</div>
+<div style="margin-left: 0.25rem;">{referrers_html}{more_html}</div>
+<div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #f1f5f9;"><span style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 0.25rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600;">{backlinks_count} backlink{'s' if backlinks_count != 1 else ''} at risk</span></div>
+</div>'''
+
+    return card_html
 
 
 def generate_csv_export(backlinks: list, domain: str) -> str:
@@ -629,12 +687,15 @@ def render_landing_page():
             clear_query_params()
             st.rerun()
 
+    # Wrap scan button with shimmer effect
+    st.markdown('<div class="shimmer-btn">', unsafe_allow_html=True)
     scan_clicked = st.button(
         "Scan for Broken Backlinks",
         type="primary",
         use_container_width=True,
         disabled=is_rate_limited
     )
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # Handle scan
     if scan_clicked and domain_input and not is_rate_limited:
@@ -754,20 +815,6 @@ def render_landing_page():
                 for opp in teaser_opportunities:
                     st.markdown(render_opportunity_card(opp), unsafe_allow_html=True)
 
-                # Blurred preview of remaining opportunities
-                if total_opportunities > 3:
-                    remaining_count = total_opportunities - 3
-
-                    st.markdown('<div class="teaser-overlay">', unsafe_allow_html=True)
-
-                    # Show 1-2 blurred cards
-                    st.markdown('<div class="teaser-blur">', unsafe_allow_html=True)
-                    for opp in opportunities[3:5]:
-                        st.markdown(render_opportunity_card(opp), unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
-
-                    st.markdown('</div>', unsafe_allow_html=True)
-
                 # Email capture CTA
                 st.markdown(f"""
                     <div class="teaser-cta">
@@ -824,134 +871,60 @@ def render_landing_page():
                         st.rerun()
 
             else:
-                # Full results view
-                st.markdown("""
-                    <div class="success-message">
-                        <h3>Results Unlocked!</h3>
-                        <p>You're losing link equity from these dead pages. Export the list or fix them now.</p>
-                    </div>
-                    <style>
-                        /* Equal button heights for action buttons */
-                        .action-buttons-row .stButton > button,
-                        .action-buttons-row .stDownloadButton > button {
-                            height: 48px !important;
-                            min-height: 48px !important;
-                            padding: 0.5rem 1rem !important;
-                        }
-                    </style>
-                """, unsafe_allow_html=True)
+                # =========================================================
+                # POST-EMAIL CAPTURE: Full Results View
+                # =========================================================
 
-                # Action buttons row
-                st.markdown('<div class="action-buttons-row">', unsafe_allow_html=True)
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("🚀 Fix These Now", type="primary", use_container_width=True):
-                        # Initialize backlink reclaim state
-                        init_backlink_reclaim_state()
+                # Calculate summary stats for the CTA
+                opportunities = group_backlinks_by_dead_page(backlinks)
+                unique_domains = set()
+                for bl in backlinks:
+                    if bl.get("referring_domain"):
+                        unique_domains.add(bl.get("referring_domain"))
+                unique_domain_count = len(unique_domains)
 
-                        # Build scan results object for the fix workflow
-                        fix_scan_results = {
-                            'domain': results['domain'],
-                            'broken_backlinks': backlinks,
-                            'broken_count': results['broken_count'],
-                            'total_count': results['total_count'],
-                            'api_cost_cents': results.get('api_cost', 0),
-                        }
+                # Get top 3 referring domains by DR
+                domain_dr_map = {}
+                for bl in backlinks:
+                    domain = bl.get("referring_domain", "")
+                    dr = bl.get("domain_rank", 0)
+                    if domain and (domain not in domain_dr_map or dr > domain_dr_map[domain]):
+                        domain_dr_map[domain] = dr
+                top_domains = sorted(domain_dr_map.items(), key=lambda x: x[1], reverse=True)[:3]
+                top_domains_text = ", ".join([f"{d[0]} (DR {d[1]})" for d in top_domains])
 
-                        # Load into br_ session state using the shared function
-                        load_scan_results(fix_scan_results, results['domain'])
+                # Determine urgency level based on DR scores
+                max_dr = top_domains[0][1] if top_domains else 0
+                if max_dr >= 70:
+                    urgency = "CRITICAL"
+                    urgency_color = "#dc2626"
+                elif max_dr >= 50:
+                    urgency = "HIGH"
+                    urgency_color = "#ea580c"
+                elif max_dr >= 30:
+                    urgency = "MEDIUM"
+                    urgency_color = "#ca8a04"
+                else:
+                    urgency = "LOW"
+                    urgency_color = "#65a30d"
 
-                        # Set current task to backlink_reclaim
-                        st.session_state.current_task = 'backlink_reclaim'
-                        st.session_state.task_type = 'backlink_reclaim'
+                # =========================================================
+                # 1. PRIMARY CTA BOX - Above the fold
+                # =========================================================
+                st.markdown(f'''
+<div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); border-radius: 16px; padding: 2rem; text-align: center; margin-bottom: 1.5rem; box-shadow: 0 4px 20px rgba(13, 148, 136, 0.3);">
+<h2 style="color: white; margin: 0 0 1rem 0; font-size: 1.75rem;">🎯 Ready to reclaim these backlinks?</h2>
+<p style="color: rgba(255,255,255,0.9); font-size: 1.1rem; margin-bottom: 1.5rem; line-height: 1.6;">You have <strong style="color: white;">{results["broken_count"]} broken backlinks</strong> from {unique_domain_count} domains including {top_domains_text}. Fix them in 5 minutes.</p>
+<div style="display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap; margin-top: 1rem;">
+<span style="color: rgba(255,255,255,0.85); font-size: 0.9rem;">✓ Connect WordPress</span>
+<span style="color: rgba(255,255,255,0.85); font-size: 0.9rem;">✓ AI suggests redirects</span>
+<span style="color: rgba(255,255,255,0.85); font-size: 0.9rem;">✓ One-click fix</span>
+</div>
+</div>
+                ''', unsafe_allow_html=True)
 
-                        # Set flag to navigate to main tool on next rerun
-                        st.session_state.navigate_to_fix_workflow = True
-                        # Also set flag to scroll to the backlink section
-                        st.session_state.br_scroll_to_section = True
-                        # Flag to indicate user came from landing page (hide upload section)
-                        st.session_state.br_from_landing = True
-
-                        # Clear query params (removes ?feature=reclaim)
-                        clear_query_params()
-                        st.rerun()
-                with col2:
-                    # Generate CSV data
-                    csv_data = generate_csv_export(backlinks, results["domain"])
-                    st.download_button(
-                        label="📥 Export CSV",
-                        data=csv_data,
-                        file_name=f"{results['domain']}_broken_backlinks.csv",
-                        mime="text/csv",
-                        use_container_width=True
-                    )
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                # Full results table with pagination
-                total_backlinks = len(backlinks)
-                per_page = 10
-
-                # Initialize pagination state
-                if "backlinks_page" not in st.session_state:
-                    st.session_state.backlinks_page = 0
-
-                total_pages = (total_backlinks + per_page - 1) // per_page  # Ceiling division
-                current_page = st.session_state.backlinks_page
-
-                # Ensure current page is within bounds
-                if current_page >= total_pages:
-                    current_page = max(0, total_pages - 1)
-                    st.session_state.backlinks_page = current_page
-
-                start_idx = current_page * per_page
-                end_idx = min(start_idx + per_page, total_backlinks)
-
-                st.markdown(f"### All Broken Backlinks ({total_backlinks} total)", unsafe_allow_html=True)
-
-                # Show current page of results
-                for bl in backlinks[start_idx:end_idx]:
-                    st.markdown(render_backlink_card(bl), unsafe_allow_html=True)
-
-                # Pagination controls
-                if total_pages > 1:
-                    st.markdown(f"""
-                        <p style="text-align: center; color: #64748b; margin: 1rem 0 0.5rem 0;">
-                            Showing {start_idx + 1}-{end_idx} of {total_backlinks} backlinks
-                        </p>
-                    """, unsafe_allow_html=True)
-
-                    col_prev, col_page, col_next = st.columns([1, 2, 1])
-
-                    with col_prev:
-                        if current_page > 0:
-                            if st.button("← Previous", key="prev_page", use_container_width=True):
-                                st.session_state.backlinks_page = current_page - 1
-                                st.rerun()
-
-                    with col_page:
-                        st.markdown(f"""
-                            <p style="text-align: center; color: #0d9488; font-weight: 600; padding: 0.5rem 0;">
-                                Page {current_page + 1} of {total_pages}
-                            </p>
-                        """, unsafe_allow_html=True)
-
-                    with col_next:
-                        if current_page < total_pages - 1:
-                            if st.button("Next →", key="next_page", use_container_width=True):
-                                st.session_state.backlinks_page = current_page + 1
-                                st.rerun()
-
-                # Bottom CTA section
-                st.markdown("""
-                    <div style="background: linear-gradient(135deg, #f0fdfa 0%, #ecfeff 100%); border: 2px solid #14b8a6; border-radius: 16px; padding: 2rem; text-align: center; margin-top: 2rem;">
-                        <h3 style="color: #0f172a; margin-bottom: 0.75rem; font-size: 1.5rem;">Ready to reclaim this link equity?</h3>
-                        <p style="color: #64748b; margin-bottom: 1.5rem; line-height: 1.6;">
-                            Screaming Fixes connects to your WordPress site and creates redirects for these dead pages in minutes. No manual .htaccess editing. No plugins to configure.
-                        </p>
-                    </div>
-                """, unsafe_allow_html=True)
-
-                if st.button("🔧 Open Screaming Fixes", type="primary", use_container_width=True, key="bottom_cta"):
+                # Big primary CTA button
+                if st.button("🚀 Fix These Now — It's Free", type="primary", use_container_width=True, key="top_cta"):
                     # Initialize backlink reclaim state
                     init_backlink_reclaim_state()
 
@@ -973,20 +946,140 @@ def render_landing_page():
 
                     # Set flag to navigate to main tool on next rerun
                     st.session_state.navigate_to_fix_workflow = True
-                    # Also set flag to scroll to the backlink section
                     st.session_state.br_scroll_to_section = True
-                    # Flag to indicate user came from landing page (hide upload section)
                     st.session_state.br_from_landing = True
 
-                    # Clear query params (removes ?feature=reclaim)
                     clear_query_params()
                     st.rerun()
 
-                st.markdown("""
-                    <p style="text-align: center; color: #0d9488; font-weight: 500; margin-top: 1rem;">
-                        The SEO fixer that actually pushes changes to WordPress
-                    </p>
-                """, unsafe_allow_html=True)
+                # =========================================================
+                # 2. VALUE SUMMARY - What they're losing
+                # =========================================================
+                st.markdown(f'''
+<div style="background: #fefce8; border: 1px solid #fef08a; border-radius: 12px; padding: 1.25rem; margin: 1.5rem 0;">
+<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+<div>
+<span style="font-weight: 600; color: #854d0e; font-size: 1rem;">⚠️ Link equity at risk:</span>
+<span style="background: {urgency_color}; color: white; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.85rem; font-weight: 700; margin-left: 0.5rem;">{urgency}</span>
+</div>
+<div style="color: #854d0e; font-size: 0.9rem;">
+<strong>{results["broken_count"]}</strong> backlinks from <strong>{unique_domain_count}</strong> domains
+</div>
+</div>
+<div style="margin-top: 0.75rem; color: #a16207; font-size: 0.9rem;">
+<strong>Top referring domains:</strong> {top_domains_text}
+</div>
+</div>
+                ''', unsafe_allow_html=True)
+
+                # =========================================================
+                # 3. RESULTS LIST - Scrollable details
+                # =========================================================
+                total_backlinks = len(backlinks)
+                per_page = 10
+
+                if "backlinks_page" not in st.session_state:
+                    st.session_state.backlinks_page = 0
+
+                total_pages = (total_backlinks + per_page - 1) // per_page
+                current_page = st.session_state.backlinks_page
+
+                if current_page >= total_pages:
+                    current_page = max(0, total_pages - 1)
+                    st.session_state.backlinks_page = current_page
+
+                start_idx = current_page * per_page
+                end_idx = min(start_idx + per_page, total_backlinks)
+
+                st.markdown(f'''
+<div style="display: flex; justify-content: space-between; align-items: center; margin: 1.5rem 0 1rem 0;">
+<h3 style="margin: 0; color: #0f172a;">All Broken Backlinks</h3>
+<span style="color: #64748b; font-size: 0.9rem;">{total_backlinks} total</span>
+</div>
+                ''', unsafe_allow_html=True)
+
+                for bl in backlinks[start_idx:end_idx]:
+                    st.markdown(render_backlink_card(bl), unsafe_allow_html=True)
+
+                # Pagination controls
+                if total_pages > 1:
+                    st.markdown(f'''
+<p style="text-align: center; color: #64748b; margin: 1rem 0 0.5rem 0;">
+Showing {start_idx + 1}-{end_idx} of {total_backlinks} backlinks
+</p>
+                    ''', unsafe_allow_html=True)
+
+                    col_prev, col_page, col_next = st.columns([1, 2, 1])
+
+                    with col_prev:
+                        if current_page > 0:
+                            if st.button("← Previous", key="prev_page", use_container_width=True):
+                                st.session_state.backlinks_page = current_page - 1
+                                st.rerun()
+
+                    with col_page:
+                        st.markdown(f'''
+<p style="text-align: center; color: #0d9488; font-weight: 600; padding: 0.5rem 0;">
+Page {current_page + 1} of {total_pages}
+</p>
+                        ''', unsafe_allow_html=True)
+
+                    with col_next:
+                        if current_page < total_pages - 1:
+                            if st.button("Next →", key="next_page", use_container_width=True):
+                                st.session_state.backlinks_page = current_page + 1
+                                st.rerun()
+
+                # =========================================================
+                # 4. BOTTOM CTA + Export Options
+                # =========================================================
+                st.markdown('''
+<div style="background: linear-gradient(135deg, #f0fdfa 0%, #ecfeff 100%); border: 2px solid #14b8a6; border-radius: 16px; padding: 1.5rem; text-align: center; margin-top: 2rem;">
+<h3 style="color: #0f172a; margin: 0 0 0.5rem 0; font-size: 1.25rem;">Don't let this link equity go to waste</h3>
+<p style="color: #64748b; margin-bottom: 1rem; font-size: 0.95rem;">Screaming Fixes connects to WordPress and creates redirects automatically.</p>
+</div>
+                ''', unsafe_allow_html=True)
+
+                if st.button("🚀 Fix These Now", type="primary", use_container_width=True, key="bottom_cta"):
+                    init_backlink_reclaim_state()
+                    fix_scan_results = {
+                        'domain': results['domain'],
+                        'broken_backlinks': backlinks,
+                        'broken_count': results['broken_count'],
+                        'total_count': results['total_count'],
+                        'api_cost_cents': results.get('api_cost', 0),
+                    }
+                    load_scan_results(fix_scan_results, results['domain'])
+                    st.session_state.current_task = 'backlink_reclaim'
+                    st.session_state.task_type = 'backlink_reclaim'
+                    st.session_state.navigate_to_fix_workflow = True
+                    st.session_state.br_scroll_to_section = True
+                    st.session_state.br_from_landing = True
+                    clear_query_params()
+                    st.rerun()
+
+                # Export options (secondary)
+                st.markdown('''
+<p style="text-align: center; color: #64748b; margin: 1rem 0 0.5rem 0; font-size: 0.9rem;">Or export for later:</p>
+                ''', unsafe_allow_html=True)
+
+                csv_data = generate_csv_export(backlinks, results["domain"])
+                col_csv, col_spacer = st.columns([1, 1])
+                with col_csv:
+                    st.download_button(
+                        label="📥 Download CSV",
+                        data=csv_data,
+                        file_name=f"{results['domain']}_broken_backlinks.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+
+                # Social proof
+                st.markdown('''
+<p style="text-align: center; color: #94a3b8; margin-top: 1.5rem; font-size: 0.85rem;">
+✨ Join 100+ SEOs who've reclaimed their backlinks with Screaming Fixes
+</p>
+                ''', unsafe_allow_html=True)
 
     # Footer with navigation
     st.markdown("""

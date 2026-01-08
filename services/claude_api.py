@@ -120,7 +120,15 @@ Only output the JSON."""
         return {'action': 'remove', 'url': None, 'notes': result_text[:150] if result_text else 'Could not parse response.'}
 
     except Exception as e:
-        return {'action': 'remove', 'url': None, 'notes': f'Error: {str(e)[:100]}'}
+        error_str = str(e)
+        # Check for authentication errors and provide helpful message
+        if '401' in error_str or 'authentication_error' in error_str or 'invalid' in error_str.lower():
+            return {
+                'action': 'error',
+                'url': None,
+                'notes': 'API key error. Please add a valid Claude API key in the Integrations Setup section above.'
+            }
+        return {'action': 'remove', 'url': None, 'notes': f'Error: {error_str[:100]}'}
 
 
 def get_ai_alt_text_suggestion(image_url: str, info: Dict, domain: str, api_key: str) -> Dict[str, str]:

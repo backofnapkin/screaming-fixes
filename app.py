@@ -1439,43 +1439,49 @@ def render_spreadsheet():
     pending_urls = [url for url, d in decisions.items() if not d['approved_action']]
     has_ai_key = bool(st.session_state.anthropic_key) or (AGENT_MODE_API_KEY and st.session_state.ai_suggestions_remaining > 0)
     
-    # Top action bar
-    st.markdown("---")
-    action_cols = st.columns([2, 2, 2])
-    
-    with action_cols[0]:
-        if has_ai_key and len(pending_urls) > 0:
-            if st.button(f"🤖 Bulk AI Analyze ({len(pending_urls)})", type="primary", use_container_width=True, help="Get AI suggestions for all pending URLs"):
-                st.session_state.show_bulk_ai_modal = True
-                st.rerun()
-        else:
-            st.button(f"🤖 Bulk AI Analyze", use_container_width=True, disabled=True, help="Add API key to enable")
-    
-    with action_cols[1]:
-        # Count URLs with AI suggestions ready to approve
-        ai_ready = [url for url, d in decisions.items() if d['ai_action'] and not d['approved_action']]
-        if ai_ready:
-            if st.button(f"✅ Approve All AI ({len(ai_ready)})", use_container_width=True, help="Approve all pending AI suggestions"):
-                for url in ai_ready:
-                    decisions[url]['approved_action'] = decisions[url]['ai_action']
-                    decisions[url]['approved_fix'] = decisions[url]['ai_suggestion']
-                st.toast(f"✅ Approved {len(ai_ready)} AI suggestions", icon="✅")
-                time.sleep(0.3)
-                st.rerun()
-        else:
-            st.button("✅ Approve All AI", use_container_width=True, disabled=True, help="No AI suggestions to approve")
-    
-    with action_cols[2]:
-        approved_count = sum(1 for d in decisions.values() if d['approved_action'])
-        if st.button(f"📥 Export ({approved_count})", use_container_width=True, disabled=approved_count == 0):
-            st.session_state.scroll_to_export = True
-    
-    # Handle bulk AI modal
+    # Count URLs with AI suggestions ready to approve
+    ai_ready = [url for url, d in decisions.items() if d['ai_action'] and not d['approved_action']]
+
+    # Handle bulk AI modal first (if open, render it and return)
     if st.session_state.get('show_bulk_ai_modal'):
         render_bulk_ai_modal(pending_urls, broken_urls, domain)
         return
-    
-    st.markdown("---")
+
+    # Bulk AI Actions expander
+    with st.expander("🤖 Bulk AI Actions", expanded=False):
+        st.markdown("""
+**Analyze multiple broken links at once with AI**
+
+AI will review each broken link and suggest the best fix:
+- Find a replacement URL on your site or the web
+- Recommend removing the link if no good replacement exists
+- Skip links that need manual review
+        """)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if len(pending_urls) > 0:
+                if st.button(f"🤖 Bulk AI Analyze ({len(pending_urls)})", type="primary", use_container_width=True, help="Get AI suggestions for all pending URLs"):
+                    # Check for API key when button is clicked
+                    if not has_ai_key:
+                        st.warning("⚠️ Claude API key required. Add your API key in the Integrations Setup section above to use AI features.")
+                    else:
+                        st.session_state.show_bulk_ai_modal = True
+                        st.rerun()
+            else:
+                st.button("🤖 Bulk AI Analyze", use_container_width=True, disabled=True, help="No pending URLs to analyze")
+
+        with col2:
+            if ai_ready:
+                if st.button(f"✅ Approve All AI ({len(ai_ready)})", use_container_width=True, help="Approve all pending AI suggestions"):
+                    for url in ai_ready:
+                        decisions[url]['approved_action'] = decisions[url]['ai_action']
+                        decisions[url]['approved_fix'] = decisions[url]['ai_suggestion']
+                    st.toast(f"✅ Approved {len(ai_ready)} AI suggestions", icon="✅")
+                    time.sleep(0.3)
+                    st.rerun()
+            else:
+                st.button("✅ Approve All AI", use_container_width=True, disabled=True, help="No AI suggestions to approve")
     
     # Compact filters row - consolidated dropdowns
     filter_cols = st.columns([1.5, 1.5, 1.2, 1.2, 1.5])
@@ -1729,7 +1735,17 @@ Only output the JSON array, nothing else."""
 
 def render_bulk_ai_modal(pending_urls: List[str], broken_urls: Dict, domain: str):
     """Render bulk AI analysis modal with batch processing"""
-    
+
+    # Check for user's API key first (require user to add their own key)
+    user_has_api_key = bool(st.session_state.anthropic_key)
+    if not user_has_api_key:
+        st.markdown("### 🤖 Bulk AI Analysis")
+        st.warning("⚠️ Claude API key required. Add your API key in the Integrations Setup section above to use AI features.")
+        if st.button("Close", use_container_width=True):
+            st.session_state.show_bulk_ai_modal = False
+            st.rerun()
+        return
+
     # Get already analyzed URLs (those with AI suggestions)
     already_analyzed = st.session_state.get('bulk_ai_analyzed_urls', set())
     
@@ -2352,14 +2368,18 @@ def render_inline_edit(url: str, info: Dict, decision: Dict, domain: str):
         # Show AI suggestion if available
         if decision['ai_action']:
             st.markdown("**AI Suggestion:**")
-            if decision['ai_action'] == 'remove':
+            if decision['ai_action'] == 'error':
+                # Show error with helpful message about API key
+                st.warning(f"⚠️ {decision.get('ai_notes', 'API key error. Please add a valid Claude API key in the Integrations Setup section above.')}")
+            elif decision['ai_action'] == 'remove':
                 st.info(f"🗑️ **Remove link** — {decision['ai_notes'][:100]}..." if len(decision.get('ai_notes', '')) > 100 else f"🗑️ **Remove link** — {decision.get('ai_notes', 'No suitable replacement found')}")
             else:
                 st.success(f"🔗 **Replace with:** `{decision['ai_suggestion']}`")
                 if decision.get('ai_notes'):
                     st.caption(decision['ai_notes'][:150] + "..." if len(decision['ai_notes']) > 150 else decision['ai_notes'])
             
-            if st.button("✅ Accept AI Suggestion", key=f"accept_ai_{url}", type="primary", use_container_width=True):
+            # Only show accept button if not an error
+            if decision['ai_action'] != 'error' and st.button("✅ Accept AI Suggestion", key=f"accept_ai_{url}", type="primary", use_container_width=True):
                 decision['approved_action'] = decision['ai_action']
                 decision['approved_fix'] = decision['ai_suggestion']
                 st.session_state.editing_url = None
@@ -5088,6 +5108,19 @@ def main():
         elif current_task == 'broken_links' and has_broken_links:
             # Broken Links workflow (existing)
             st.markdown('<p class="section-header">🔗 Broken Links</p>', unsafe_allow_html=True)
+
+            # Show guidance box based on WordPress connection status
+            if not st.session_state.get('wp_connected'):
+                st.info("""
+**📍 How to fix broken links:**
+
+1. **Set fixes below** → Click "Set Fix" on each row to remove, replace, or get AI suggestion
+2. **Connect WordPress** → Click on Connect to WordPress below to connect your site
+3. **Apply fixes** → Click "Publish to WordPress" to update all posts automatically
+                """)
+            else:
+                st.success("✅ WordPress connected. Set fixes below, then click 'Publish to WordPress' when ready.")
+
             render_metrics()
             st.markdown("---")
             render_spreadsheet()

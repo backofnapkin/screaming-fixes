@@ -35,6 +35,12 @@ except ImportError:
     SEO_SERVICE_AVAILABLE = False
 
 try:
+    from wordpress_client import WordPressClient
+    WP_CLIENT_AVAILABLE = True
+except ImportError:
+    WP_CLIENT_AVAILABLE = False
+
+try:
     from services.claude_api import track_event
 except ImportError:
     def track_event(event_name: str, metadata: Dict = None):
@@ -792,18 +798,121 @@ def render_apply_section():
         )
 
     else:
-        # WordPress not connected - show info with link to integrations
-        info_cols = st.columns([5, 2])
-        with info_cols[0]:
-            st.info(
-                "Connect to WordPress to create redirects automatically. "
-                "You can also export the redirects below."
+        # WordPress not connected - show step-by-step flow with inline form
+        st.markdown("""
+        <div style="background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+            <div style="font-weight: 600; color: #92400e; margin-bottom: 0.5rem;">📍 Two steps to create redirects:</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Step 1: Connect WordPress - Inline form
+        st.markdown("""
+        <div style="background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                <span style="font-size: 1.5rem;">1️⃣</span>
+                <div>
+                    <div style="font-size: 1.1rem; font-weight: 600; color: #0f172a;">
+                        Step 1: Connect WordPress
+                    </div>
+                    <div style="font-size: 0.85rem; color: #64748b; margin-top: 0.25rem;">Apply fixes directly to your site</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Why this matters section
+        st.markdown("""
+        <div style="background: #f8fafc; border-radius: 8px; padding: 1rem; margin-top: -0.5rem; margin-bottom: 1rem; border: 1px solid #e2e8f0;">
+            <div style="font-size: 0.9rem; color: #475569; line-height: 1.6;">
+                <strong>Why this matters:</strong> This is where the magic happens! Instead of manually creating redirects
+                one by one, we'll apply all your approved fixes automatically via the WordPress REST API.
+                Fix hundreds of dead backlinks in minutes, not hours.<br><br>
+                <strong>How to get it:</strong> Generate an Application Password in your WordPress admin.
+                Takes about 2 minutes. Your regular login password won't work — you need this special API password.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Step-by-step instructions expander
+        with st.expander("📋 Step-by-step instructions", expanded=False):
+            st.markdown("""
+            1. Log into your **WordPress Admin** dashboard
+            2. Go to **Users → Profile** (or click your name in the top-right)
+            3. Scroll down to the **Application Passwords** section
+            4. Enter name: `Screaming Fixes`
+            5. Click **Add New Application Password**
+            6. **Copy the password immediately** — you'll only see it once!
+            7. Enter your details below
+
+            **Note:** You need WordPress 5.6+ or the Application Passwords plugin.
+            """)
+
+        # WordPress connection form
+        col1, col2 = st.columns(2)
+        with col1:
+            wp_url = st.text_input(
+                "Site URL",
+                placeholder="https://your-site.com",
+                key="br_wp_url"
             )
-        with info_cols[1]:
-            if st.button("⚙️ Open Integrations", use_container_width=True, key="br_open_integrations"):
-                st.session_state.show_integrations = True
-                st.session_state.scroll_to_integrations = True  # Flag to scroll to top
-                st.rerun()
+        with col2:
+            wp_username = st.text_input(
+                "Username",
+                placeholder="admin",
+                key="br_wp_username"
+            )
+
+        wp_password = st.text_input(
+            "Application Password (NOT your login password)",
+            type="password",
+            placeholder="xxxx xxxx xxxx xxxx xxxx xxxx",
+            key="br_wp_password"
+        )
+
+        if st.button("🔌 Connect to WordPress", key="br_connect_wp", type="primary", use_container_width=True):
+            if not all([wp_url, wp_username, wp_password]):
+                st.error("Please fill in all fields")
+            elif not WP_CLIENT_AVAILABLE:
+                st.error("WordPress client not available. Check that wordpress_client.py is present.")
+            else:
+                with st.spinner("Connecting..."):
+                    try:
+                        client = WordPressClient(wp_url, wp_username, wp_password)
+                        result = client.test_connection()
+
+                        if result["success"]:
+                            st.session_state.wp_connected = True
+                            st.session_state.wp_client = client
+                            st.success(f"✅ {result['message']}")
+                            st.rerun()
+                        else:
+                            st.error(result["message"])
+                    except Exception as e:
+                        st.error(f"Connection failed: {str(e)}")
+
+        st.caption("🔒 Credentials stored in your browser session only. Cleared when you close the tab.")
+
+        # Step 2: Create Redirects (disabled until WP connected)
+        st.markdown("""
+        <div style="background: #f1f5f9; border: 2px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; margin-top: 1.5rem; margin-bottom: 1rem; opacity: 0.7;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span style="font-size: 1.5rem;">2️⃣</span>
+                <div>
+                    <div style="font-size: 1.1rem; font-weight: 600; color: #64748b;">
+                        Step 2: Create Redirects <span style="font-weight: 400; font-size: 0.8rem;">(after connecting WordPress)</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 0.25rem;">Complete Step 1 first to enable. This will send your fixes directly to WordPress. This is the last step!</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button(
+            f"🚀 Create {counts['redirect']} Redirect{'s' if counts['redirect'] != 1 else ''}",
+            use_container_width=True,
+            key="br_create_redirects_disabled"
+        ):
+            st.warning("⚠️ Please connect WordPress first using Step 1 above, then you can create redirects automatically.")
 
     # Export options (always available)
     st.markdown("""
@@ -1029,6 +1138,18 @@ def render_backlink_fix_workflow(
     if st.session_state.br_workflow_complete:
         render_success_state()
         return
+
+    # Show guidance box based on WordPress connection status
+    if not st.session_state.get('wp_connected'):
+        st.info("""
+**📍 How to fix these broken backlinks:**
+
+1. **Set fixes below** → Click "Set Fix" on each row to choose a redirect
+2. **Connect WordPress** → Click on Connect to WordPress below to connect your site
+3. **Create redirects** → Click the Create Redirects button to push fixes to your site
+        """)
+    else:
+        st.success("✅ WordPress connected. Set fixes below, then click 'Create Redirects' when ready.")
 
     # Render the workflow - matches Broken Links style
     render_metrics()
