@@ -267,7 +267,10 @@ def render_feature_cards():
                         if error:
                             st.error(f"Scan failed: {error}")
                         elif broken_count == 0:
-                            st.info(f"No broken backlinks found for {clean_domain}. Great news!")
+                            # Set flag for zero results banner
+                            st.session_state.br_scan_just_completed = True
+                            st.session_state.br_scan_found_zero = True
+                            st.session_state.br_scanned_domain = clean_domain
                         else:
                             # Build scan results object
                             scan_results = {
@@ -285,7 +288,10 @@ def render_feature_cards():
                             st.session_state.current_task = 'backlink_reclaim'
                             st.session_state.task_type = 'backlink_reclaim'
 
-                            st.success(f"Found {broken_count} broken backlinks on {clean_domain}!")
+                            # Set flags for success banner and scroll
+                            st.session_state.br_scan_just_completed = True
+                            st.session_state.br_scan_found_zero = False
+                            st.session_state.br_should_scroll = True
                             st.rerun()
                     except Exception as e:
                         st.error(f"Error scanning domain: {str(e)}")
@@ -293,6 +299,54 @@ def render_feature_cards():
             st.error("Backlink scanning is not available. Please check your configuration.")
     elif scan_clicked and not domain_input:
         st.warning("Please enter a domain to scan")
+
+    # Show success/congratulations banner after scan completes
+    if st.session_state.get('br_scan_just_completed'):
+        if st.session_state.get('br_scan_found_zero'):
+            # No broken backlinks found - congratulate user
+            scanned_domain = st.session_state.get('br_scanned_domain', 'your site')
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+                        border: 2px solid #22c55e; border-radius: 12px; padding: 1.5rem;
+                        margin: 1rem 0;">
+                <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎉</div>
+                <div style="font-size: 1.25rem; font-weight: 700; color: #166534; margin-bottom: 0.5rem;">
+                    Great news! No broken backlinks found on {scanned_domain}.
+                </div>
+                <div style="color: #15803d; margin-bottom: 1rem;">
+                    Your site doesn't have any backlinks pointing to 404 pages. Nice SEO work!
+                </div>
+                <div style="color: #166534; font-size: 0.95rem;">
+                    <strong>What else can you fix?</strong> Upload a Screaming Frog CSV above to find and fix broken internal links, redirect chains, or missing image alt text.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            # Clear the flags
+            st.session_state.br_scan_just_completed = False
+            st.session_state.br_scan_found_zero = False
+        else:
+            # Results found - show success banner with link to results
+            dead_pages = len(st.session_state.get('br_grouped_pages', {}))
+            total_backlinks = st.session_state.get('br_scan_results', {}).get('broken_count', 0)
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
+                        border: 2px solid #14b8a6; border-radius: 12px; padding: 1rem 1.5rem;
+                        margin: 1rem 0;">
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <span style="font-size: 1.25rem; font-weight: 700; color: #0f766e;">
+                            ✅ Found {dead_pages} dead pages with {total_backlinks} backlinks at risk!
+                        </span>
+                    </div>
+                    <span style="background: #14b8a6; color: white; padding: 0.5rem 1rem;
+                                border-radius: 8px; font-weight: 600;">
+                        👇 Scroll down to view results
+                    </span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            # Clear the flag
+            st.session_state.br_scan_just_completed = False
 
     # Get integration status
     status = get_integration_status()

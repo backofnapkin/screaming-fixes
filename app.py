@@ -5159,9 +5159,10 @@ def main():
             st.markdown('<div id="backlink-reclaim-section"></div>', unsafe_allow_html=True)
             st.markdown('<p class="section-header">🔙 Backlink Reclaim</p>', unsafe_allow_html=True)
 
-            # Auto-scroll to section if coming from landing page
-            if st.session_state.get('br_scroll_to_section'):
+            # Auto-scroll to section if coming from landing page or after scan
+            if st.session_state.get('br_scroll_to_section') or st.session_state.get('br_should_scroll'):
                 st.session_state.br_scroll_to_section = False
+                st.session_state.br_should_scroll = False
                 # Use components.html to execute JavaScript for scrolling
                 import streamlit.components.v1 as components
                 components.html("""
