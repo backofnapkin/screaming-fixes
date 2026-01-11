@@ -1,11 +1,6 @@
 const https = require('https');
 
-// Rate limit storage (in production, use a database like Netlify Blobs or Redis)
-// For now, this resets on each deploy - we'll improve later
-const rateLimitCache = new Map();
-
 exports.handler = async (event, context) => {
-  // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -13,12 +8,10 @@ exports.handler = async (event, context) => {
     'Content-Type': 'application/json'
   };
 
-  // Handle preflight
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
   }
 
-  // Only allow POST
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
@@ -28,7 +21,7 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    const { domain, site_url } = JSON.parse(event.body || '{}');
+    const { domain } = JSON.parse(event.body || '{}');
 
     if (!domain) {
       return {
@@ -38,7 +31,6 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Normalize domain
     const normalizedDomain = domain
       .toLowerCase()
       .replace(/^https?:\/\//, '')
@@ -46,23 +38,6 @@ exports.handler = async (event, context) => {
       .replace(/\/$/, '')
       .split('/')[0];
 
-    // Check rate limit (1 per day per domain)
-    const today = new Date().toISOString().split('T')[0];
-    const rateLimitKey = `${normalizedDomain}-${today}`;
-    
-    if (rateLimitCache.has(rateLimitKey)) {
-      return {
-        statusCode: 429,
-        headers,
-        body: JSON.stringify({ 
-          error: 'Rate limit exceeded',
-          message: 'Free scan limit reached for this domain. Try again tomorrow or add your own DataForSEO API key.',
-          next_scan_available: 'tomorrow'
-        })
-      };
-    }
-
-    // Get credentials from environment variables
     const login = process.env.DATAFORSEO_LOGIN;
     const password = process.env.DATAFORSEO_PASSWORD;
 
@@ -74,7 +49,6 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Call DataForSEO API
     const apiResult = await callDataForSEO(normalizedDomain, login, password);
 
     if (apiResult.error) {
@@ -84,9 +58,6 @@ exports.handler = async (event, context) => {
         body: JSON.stringify({ error: apiResult.error })
       };
     }
-
-    // Mark rate limit
-    rateLimitCache.set(rateLimitKey, true);
 
     return {
       statusCode: 200,
@@ -104,21 +75,19 @@ exports.handler = async (event, context) => {
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Internal server error' })
+      body: JSON.stringify({ error: 'Internal server error: ' + error.message })
     };
   }
 };
 
-async function callDataForSEO(domain, login, password) {
+function callDataForSEO(domain, login, password) {
   return new Promise((resolve) => {
-    const auth = Buffer.from(`${login}:${password}`).toString('base64');
+    const auth = Buffer.from(login + ':' + password).toString('base64');
     
-    // Step 1: Get backlinks for the domain
     const postData = JSON.stringify([{
       target: domain,
       limit: 1000,
-      mode: "as_is",
-      filters: ["is_lost", "=", false]
+      mode: 'as_is'
     }]);
 
     const options = {
@@ -126,7 +95,7 @@ async function callDataForSEO(domain, login, password) {
       path: '/v3/backlinks/backlinks/live',
       method: 'POST',
       headers: {
-        'Authorization': `Basic ${auth}`,
+        'Authorization': 'Basic ' + auth,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(postData)
       }
@@ -139,7 +108,7 @@ async function callDataForSEO(domain, login, password) {
         data += chunk;
       });
       
-      res.on('end', async () => {
+      res.on('end', () => {
         try {
           const response = JSON.parse(data);
           
@@ -148,30 +117,38 @@ async function callDataForSEO(domain, login, password) {
             return;
           }
 
-          const backlinks = response.tasks?.[0]?.result || [];
+          const backlinks = response.tasks && response.tasks[0] && response.tasks[0].result ? response.tasks[0].result : [];
           
-          // Group backlinks by target URL and check for 404s
           const groupedByTarget = {};
           
-          for (const link of backlinks) {
+          for (let i = 0; i < backlinks.length; i++) {
+            const link = backlinks[i];
             const targetUrl = link.url_to;
-            const targetPath = new URL(targetUrl).pathname;
+            
+            let targetPath;
+            try {
+              targetPath = new URL(targetUrl).pathname;
+            } catch (e) {
+              targetPath = targetUrl;
+            }
             
             if (!groupedByTarget[targetPath]) {
               groupedByTarget[targetPath] = {
                 dead_page: targetPath,
                 target_url: targetUrl,
                 backlink_count: 0,
-                referring_domains: new Set(),
+                referring_domains: [],
                 top_referrers: [],
                 status_code: null
               };
             }
             
             groupedByTarget[targetPath].backlink_count++;
-            groupedByTarget[targetPath].referring_domains.add(link.domain_from);
             
-            // Add to top referrers (limit to 10)
+            if (groupedByTarget[targetPath].referring_domains.indexOf(link.domain_from) === -1) {
+              groupedByTarget[targetPath].referring_domains.push(link.domain_from);
+            }
+            
             if (groupedByTarget[targetPath].top_referrers.length < 10) {
               groupedByTarget[targetPath].top_referrers.push({
                 domain: link.domain_from,
@@ -182,22 +159,19 @@ async function callDataForSEO(domain, login, password) {
             }
           }
 
-          // Check which pages are 404
           const results = [];
-          const targetUrls = Object.values(groupedByTarget);
+          const keys = Object.keys(groupedByTarget);
           
-          // Check status codes (limit concurrent checks)
-          for (const item of targetUrls.slice(0, 100)) {
-            const status = await checkUrlStatus(item.target_url);
-            if (status === 404 || status === 410 || status === 0) {
-              item.status_code = status || 404;
-              item.referring_domains = item.referring_domains.size;
-              results.push(item);
-            }
+          for (let i = 0; i < keys.length; i++) {
+            const item = groupedByTarget[keys[i]];
+            item.referring_domains_count = item.referring_domains.length;
+            delete item.referring_domains;
+            results.push(item);
           }
 
-          // Sort by backlink count
-          results.sort((a, b) => b.backlink_count - a.backlink_count);
+          results.sort(function(a, b) {
+            return b.backlink_count - a.backlink_count;
+          });
 
           resolve({ results: results.slice(0, 1000) });
           
@@ -217,48 +191,14 @@ async function callDataForSEO(domain, login, password) {
     req.end();
   });
 }
-
-async function checkUrlStatus(url) {
-  return new Promise((resolve) => {
-    try {
-      const urlObj = new URL(url);
-      const options = {
-        hostname: urlObj.hostname,
-        path: urlObj.pathname + urlObj.search,
-        method: 'HEAD',
-        timeout: 5000
-      };
-
-      const req = https.request(options, (res) => {
-        resolve(res.statusCode);
-      });
-
-      req.on('error', () => resolve(0));
-      req.on('timeout', () => {
-        req.destroy();
-        resolve(0);
-      });
-
-      req.end();
-    } catch {
-      resolve(0);
-    }
-  });
-}
 ```
 
-4. Click **"Commit changes"**
+5. Click **"Commit changes"**
 
 ---
 
-## Step 5: Wait for Netlify to redeploy
+## Step 2: Wait for redeploy and test
 
-Go back to your Netlify dashboard - it should automatically rebuild. Should take ~30 seconds.
-
----
-
-## Step 6: Test the function
-
-Once deployed, test by visiting:
+After Netlify redeploys, test the URL again:
 ```
-https://screamingfixes.netlify.app/.netlify/functions/scan-backlinks
+https://screaming-fixes.netlify.app/.netlify/functions/scan-backlinks
