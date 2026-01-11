@@ -192,13 +192,3 @@ function callDataForSEO(domain, login, password) {
   });
 }
 ```
-
-5. Click **"Commit changes"**
-
----
-
-## Step 2: Wait for redeploy and test
-
-After Netlify redeploys, test the URL again:
-```
-https://screaming-fixes.netlify.app/.netlify/functions/scan-backlinks
