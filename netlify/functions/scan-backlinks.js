@@ -191,4 +191,3 @@ function callDataForSEO(domain, login, password) {
     req.end();
   });
 }
-```
