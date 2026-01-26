@@ -1,4 +1,5 @@
 const https = require('https');
+const http = require('http');
 
 exports.handler = async (event, context) => {
   const headers = {
@@ -49,6 +50,8 @@ exports.handler = async (event, context) => {
       };
     }
 
+    console.log('Starting scan for domain:', normalizedDomain);
+
     const apiResult = await callDataForSEO(normalizedDomain, login, password);
 
     if (apiResult.error) {
@@ -59,6 +62,13 @@ exports.handler = async (event, context) => {
       };
     }
 
+    console.log('DataForSEO returned', apiResult.results.length, 'grouped URLs');
+
+    // Check which URLs are actually 404/410 (dead pages)
+    const deadPages = await filterDeadPages(apiResult.results, normalizedDomain);
+
+    console.log('Found', deadPages.length, 'dead pages with backlinks');
+
     return {
       statusCode: 200,
       headers,
@@ -66,7 +76,12 @@ exports.handler = async (event, context) => {
         success: true,
         domain: normalizedDomain,
         scanned_at: new Date().toISOString(),
-        results: apiResult.results
+        results: deadPages,
+        debug: {
+          total_urls_from_api: apiResult.results.length,
+          urls_checked: Math.min(apiResult.results.length, 100),
+          dead_pages_found: deadPages.length
+        }
       })
     };
 
@@ -80,10 +95,133 @@ exports.handler = async (event, context) => {
   }
 };
 
+/**
+ * Check URL status and filter to only 404/410 pages
+ * Checks up to 100 URLs to avoid timeout
+ */
+async function filterDeadPages(results, domain) {
+  const deadPages = [];
+  const maxChecks = 100; // Limit to avoid Netlify timeout
+  const urlsToCheck = results.slice(0, maxChecks);
+
+  // Check URLs in parallel batches of 10 for speed
+  const batchSize = 10;
+
+  for (let i = 0; i < urlsToCheck.length; i += batchSize) {
+    const batch = urlsToCheck.slice(i, i + batchSize);
+
+    const statusChecks = batch.map(async (item) => {
+      // Build full URL from the target_url or dead_page path
+      let urlToCheck = item.target_url || item.dead_page;
+
+      // If it's just a path, prepend the domain
+      if (urlToCheck && !urlToCheck.startsWith('http')) {
+        urlToCheck = 'https://' + domain + (urlToCheck.startsWith('/') ? '' : '/') + urlToCheck;
+      }
+
+      if (!urlToCheck) {
+        return null;
+      }
+
+      try {
+        const status = await checkUrlStatus(urlToCheck);
+
+        if (status === 404 || status === 410) {
+          return {
+            dead_page: urlToCheck,
+            dead_page_path: item.dead_page || new URL(urlToCheck).pathname,
+            status_code: status,
+            backlink_count: item.backlink_count || 0,
+            referring_domains: item.referring_domains_count || 0,
+            top_referrers: item.top_referrers || []
+          };
+        }
+      } catch (e) {
+        console.log('Error checking URL:', urlToCheck, e.message);
+      }
+
+      return null;
+    });
+
+    const batchResults = await Promise.all(statusChecks);
+
+    for (const result of batchResults) {
+      if (result) {
+        deadPages.push(result);
+      }
+    }
+  }
+
+  // Sort by backlink count descending
+  deadPages.sort((a, b) => b.backlink_count - a.backlink_count);
+
+  return deadPages;
+}
+
+/**
+ * Check HTTP status of a URL
+ * Returns status code or 0 on error
+ */
+function checkUrlStatus(url) {
+  return new Promise((resolve) => {
+    const timeout = 8000; // 8 second timeout per URL
+
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(url);
+    } catch (e) {
+      resolve(0);
+      return;
+    }
+
+    const protocol = parsedUrl.protocol === 'https:' ? https : http;
+
+    const options = {
+      hostname: parsedUrl.hostname,
+      path: parsedUrl.pathname + parsedUrl.search,
+      method: 'HEAD',
+      timeout: timeout,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; ScreamingFixes/1.0; +https://screamingfixes.com)'
+      }
+    };
+
+    const req = protocol.request(options, (res) => {
+      resolve(res.statusCode);
+    });
+
+    req.on('error', () => {
+      // Try GET if HEAD fails (some servers don't support HEAD)
+      const getReq = protocol.request({ ...options, method: 'GET' }, (res) => {
+        res.destroy(); // Don't download body
+        resolve(res.statusCode);
+      });
+
+      getReq.on('error', () => resolve(0));
+      getReq.on('timeout', () => {
+        getReq.destroy();
+        resolve(0);
+      });
+
+      getReq.end();
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(0);
+    });
+
+    req.end();
+  });
+}
+
+/**
+ * Call DataForSEO API to get backlinks
+ */
 function callDataForSEO(domain, login, password) {
   return new Promise((resolve) => {
     const auth = Buffer.from(login + ':' + password).toString('base64');
-    
+
     const postData = JSON.stringify([{
       target: domain,
       limit: 1000,
@@ -103,35 +241,45 @@ function callDataForSEO(domain, login, password) {
 
     const req = https.request(options, (res) => {
       let data = '';
-      
+
       res.on('data', (chunk) => {
         data += chunk;
       });
-      
+
       res.on('end', () => {
         try {
           const response = JSON.parse(data);
-          
+
           if (response.status_code !== 20000) {
             resolve({ error: response.status_message || 'API error' });
             return;
           }
 
-          const backlinks = response.tasks && response.tasks[0] && response.tasks[0].result ? response.tasks[0].result : [];
-          
+          // Get items from the nested result structure
+          const items = response.tasks &&
+                       response.tasks[0] &&
+                       response.tasks[0].result &&
+                       response.tasks[0].result[0] &&
+                       response.tasks[0].result[0].items
+                       ? response.tasks[0].result[0].items
+                       : [];
+
+          console.log('DataForSEO returned', items.length, 'backlink items');
+
+          // Group backlinks by target URL
           const groupedByTarget = {};
-          
-          for (let i = 0; i < backlinks.length; i++) {
-            const link = backlinks[i];
+
+          for (const link of items) {
             const targetUrl = link.url_to;
-            
+            if (!targetUrl) continue;
+
             let targetPath;
             try {
               targetPath = new URL(targetUrl).pathname;
             } catch (e) {
               targetPath = targetUrl;
             }
-            
+
             if (!groupedByTarget[targetPath]) {
               groupedByTarget[targetPath] = {
                 dead_page: targetPath,
@@ -142,39 +290,37 @@ function callDataForSEO(domain, login, password) {
                 status_code: null
               };
             }
-            
+
             groupedByTarget[targetPath].backlink_count++;
-            
-            if (groupedByTarget[targetPath].referring_domains.indexOf(link.domain_from) === -1) {
-              groupedByTarget[targetPath].referring_domains.push(link.domain_from);
-            }
-            
-            if (groupedByTarget[targetPath].top_referrers.length < 10) {
-              groupedByTarget[targetPath].top_referrers.push({
-                domain: link.domain_from,
-                url: link.url_from,
-                domain_rank: link.domain_from_rank || 0,
-                backlinks: 1
-              });
+
+            const domainFrom = link.domain_from;
+            if (domainFrom && !groupedByTarget[targetPath].referring_domains.includes(domainFrom)) {
+              groupedByTarget[targetPath].referring_domains.push(domainFrom);
+
+              // Add to top referrers (limit to 10)
+              if (groupedByTarget[targetPath].top_referrers.length < 10) {
+                groupedByTarget[targetPath].top_referrers.push({
+                  domain: domainFrom,
+                  url: link.url_from || '',
+                  domain_rank: link.domain_from_rank || 0,
+                  backlinks: 1
+                });
+              }
             }
           }
 
-          const results = [];
-          const keys = Object.keys(groupedByTarget);
-          
-          for (let i = 0; i < keys.length; i++) {
-            const item = groupedByTarget[keys[i]];
-            item.referring_domains_count = item.referring_domains.length;
-            delete item.referring_domains;
-            results.push(item);
-          }
+          // Convert to array and add referring_domains_count
+          const results = Object.values(groupedByTarget).map(item => ({
+            ...item,
+            referring_domains_count: item.referring_domains.length,
+            referring_domains: undefined // Remove the array, keep just the count
+          }));
 
-          results.sort(function(a, b) {
-            return b.backlink_count - a.backlink_count;
-          });
+          // Sort by backlink count descending
+          results.sort((a, b) => b.backlink_count - a.backlink_count);
 
           resolve({ results: results.slice(0, 1000) });
-          
+
         } catch (e) {
           console.error('Parse error:', e);
           resolve({ error: 'Failed to parse API response' });
