@@ -1,19 +1,684 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Screaming Fixes</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body { font-family: -apple-system, sans-serif; max-width: 600px; margin: 100px auto; padding: 20px; text-align: center; }
-        h1 { color: #14b8a6; }
-        a { color: #14b8a6; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Screaming Fixes - Bulk SEO Fixes for WordPress</title>
+  <meta name="description" content="Turn Screaming Frog reports into bulk fixes. No dev tickets. No Jira. Ship SEO fixes directly in WordPress.">
+  <meta property="og:title" content="Screaming Fixes - Bulk SEO Fixes for WordPress">
+  <meta property="og:description" content="Turn Screaming Frog reports into bulk fixes. No dev tickets. No Jira. Ship SEO fixes directly in WordPress.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://screamingfixes.com">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Screaming Fixes - Bulk SEO Fixes for WordPress">
+  <meta name="twitter:description" content="Turn Screaming Frog reports into bulk fixes. No dev tickets. No Jira. Ship SEO fixes directly in WordPress.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔧</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #1a1a1a;
+      background: #ffffff;
+      font-size: 18px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Fade-in animation */
+    .fade-in {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ---- HERO ---- */
+    #hero {
+      padding: 100px 0 80px;
+      text-align: center;
+      background: #fafafa;
+    }
+    .badge {
+      display: inline-block;
+      border: 1.5px solid #14b8a6;
+      color: #14b8a6;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 14px;
+      border-radius: 999px;
+      margin-bottom: 24px;
+      letter-spacing: 0.02em;
+    }
+    #hero h1 {
+      font-size: 56px;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      line-height: 1.1;
+      margin-bottom: 24px;
+    }
+    #hero h1 span { display: block; }
+    #hero .subtitle {
+      font-size: 20px;
+      color: #555;
+      max-width: 600px;
+      margin: 0 auto 12px;
+      line-height: 1.5;
+    }
+    #hero .subtitle-bold {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto 8px;
+    }
+    #hero .punchline {
+      font-size: 18px;
+      color: #777;
+      margin-bottom: 36px;
+    }
+    .cta {
+      display: inline-block;
+      background: #14b8a6;
+      color: #fff;
+      font-size: 18px;
+      font-weight: 600;
+      padding: 16px 36px;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+    .cta:hover {
+      background: #0d9488;
+      transform: translateY(-1px);
+    }
+    .cta-sub {
+      display: block;
+      margin-top: 12px;
+      font-size: 14px;
+      color: #999;
+    }
+
+    /* ---- VALUE PROP ---- */
+    #value-prop {
+      padding: 80px 0;
+      text-align: center;
+    }
+    #value-prop p {
+      font-size: 24px;
+      font-weight: 600;
+      color: #333;
+      max-width: 640px;
+      margin: 0 auto;
+      line-height: 1.5;
+    }
+
+    /* ---- FEATURES ---- */
+    #features { padding: 0 0 80px; }
+
+    .features-group { margin-bottom: 64px; }
+    .features-group:last-child { margin-bottom: 0; }
+
+    .features-group-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .features-group-header h2 {
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #14b8a6;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .feature-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 32px 28px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .feature-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .feature-icon {
+      width: 52px;
+      height: 52px;
+      background: #f0fdfa;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 16px;
+    }
+    .feature-card h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .feature-card p {
+      font-size: 15px;
+      color: #666;
+    }
+
+    .advanced-bg {
+      background: #f9fafb;
+      border-radius: 16px;
+      padding: 48px 40px;
+    }
+
+    /* ---- WHO IT'S FOR ---- */
+    #who {
+      padding: 80px 0;
+      text-align: center;
+    }
+    #who h2 {
+      font-size: 32px;
+      font-weight: 600;
+      margin-bottom: 32px;
+    }
+    .who-list {
+      list-style: none;
+      max-width: 520px;
+      margin: 0 auto;
+      text-align: left;
+    }
+    .who-list li {
+      font-size: 18px;
+      padding: 10px 0;
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+    .who-list li::before {
+      content: "\2713";
+      color: #14b8a6;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* ---- HOW IT WORKS ---- */
+    #how {
+      padding: 80px 0;
+      background: #fafafa;
+    }
+    #how h2 {
+      font-size: 32px;
+      font-weight: 600;
+      text-align: center;
+      margin-bottom: 56px;
+    }
+
+    .timeline {
+      max-width: 600px;
+      margin: 0 auto;
+      position: relative;
+      padding-left: 60px;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 20px;
+      top: 4px;
+      bottom: 4px;
+      width: 2px;
+      background: #d1d5db;
+    }
+    .timeline-step {
+      position: relative;
+      margin-bottom: 48px;
+    }
+    .timeline-step:last-child { margin-bottom: 0; }
+    .step-number {
+      position: absolute;
+      left: -60px;
+      top: 0;
+      width: 40px;
+      height: 40px;
+      background: #14b8a6;
+      color: #fff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+      z-index: 1;
+    }
+    .timeline-step h3 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .timeline-step p {
+      font-size: 16px;
+      color: #666;
+    }
+
+    /* ---- DOCUMENT EVERYTHING ---- */
+    #changelog {
+      padding: 80px 0;
+      text-align: center;
+    }
+    #changelog h2 {
+      font-size: 32px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    #changelog p {
+      font-size: 18px;
+      color: #555;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    /* ---- SCREENSHOT ---- */
+    #screenshot {
+      padding: 0 0 80px;
+      text-align: center;
+    }
+    .screenshot-placeholder {
+      max-width: 900px;
+      margin: 0 auto 24px;
+      background: #f3f4f6;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      height: 400px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #999;
+      font-size: 16px;
+    }
+    #screenshot p {
+      font-size: 16px;
+      color: #777;
+      font-style: italic;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* ---- INTEGRATIONS ---- */
+    #integrations {
+      padding: 80px 0;
+      background: #fafafa;
+      text-align: center;
+    }
+    #integrations h2 {
+      font-size: 32px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    #integrations .subtitle {
+      font-size: 18px;
+      color: #666;
+      margin-bottom: 40px;
+    }
+    .integration-pills {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 16px;
+    }
+    .integration-pill {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 999px;
+      padding: 10px 24px;
+      font-size: 15px;
+      font-weight: 500;
+      color: #555;
+      transition: color 0.2s ease, border-color 0.2s ease;
+    }
+    .integration-pill:hover {
+      color: #14b8a6;
+      border-color: #14b8a6;
+    }
+
+    /* ---- TESTIMONIALS ---- */
+    #testimonials {
+      padding: 80px 0;
+      background: #f0fdfa;
+    }
+    #testimonials h2 {
+      font-size: 32px;
+      font-weight: 600;
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .testimonials-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    .testimonial-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 32px 28px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      position: relative;
+    }
+    .testimonial-card::before {
+      content: "\201C";
+      position: absolute;
+      top: 16px;
+      left: 20px;
+      font-size: 64px;
+      color: #e5e7eb;
+      line-height: 1;
+      font-family: Georgia, serif;
+    }
+    .testimonial-card blockquote {
+      font-size: 16px;
+      font-style: italic;
+      color: #333;
+      margin-bottom: 16px;
+      position: relative;
+      z-index: 1;
+    }
+    .testimonial-card cite {
+      font-size: 14px;
+      font-style: normal;
+      color: #888;
+    }
+
+    /* ---- FINAL CTA ---- */
+    #final-cta {
+      padding: 100px 0;
+      text-align: center;
+    }
+    #final-cta h2 {
+      font-size: 36px;
+      font-weight: 700;
+      margin-bottom: 32px;
+      letter-spacing: -0.02em;
+    }
+
+    /* ---- FOOTER ---- */
+    footer {
+      padding: 40px 0;
+      text-align: center;
+      border-top: 1px solid #e5e7eb;
+      font-size: 14px;
+      color: #999;
+    }
+    footer a {
+      color: #999;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    footer a:hover { color: #14b8a6; }
+    footer .footer-links {
+      margin-top: 8px;
+    }
+    footer .footer-links a { margin: 0 8px; }
+
+    /* ---- RESPONSIVE ---- */
+    @media (max-width: 1024px) {
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+      .testimonials-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 768px) {
+      #hero { padding: 64px 0 48px; }
+      #hero h1 { font-size: 36px; }
+      #hero .subtitle, #hero .subtitle-bold { font-size: 17px; }
+      section, #value-prop, #who, #how, #changelog, #screenshot, #integrations, #testimonials, #final-cta {
+        padding: 48px 0;
+      }
+      h2 { font-size: 26px !important; }
+      .features-grid { grid-template-columns: 1fr; }
+      .testimonials-grid { grid-template-columns: 1fr; }
+      .advanced-bg { padding: 32px 20px; }
+      #final-cta h2 { font-size: 28px; }
+    }
+  </style>
 </head>
 <body>
-    <h1>🔧 Screaming Fixes</h1>
-    <p>Finding SEO problems is easy. Fixing them sucks.</p>
-    <p>This plugin actually fixes them—in bulk.</p>
-    <p><a href="https://wordpress.org/plugins/screaming-fixes/">Get the WordPress Plugin →</a></p>
+
+  <!-- HERO -->
+  <section id="hero">
+    <div class="container">
+      <span class="badge">WordPress Plugin</span>
+      <h1>
+        <span>Finding SEO problems is easy.</span>
+        <span>Fixing them sucks.</span>
+      </h1>
+      <p class="subtitle-bold">Screaming Frog tells you what's broken.</p>
+      <p class="subtitle">Screaming Fixes makes it fixed&mdash;in bulk, directly in WordPress.</p>
+      <p class="punchline">No dev tickets. No Jira. No waiting until Q3.</p>
+      <a href="#" class="cta">Get the WordPress Plugin &rarr;</a>
+      <span class="cta-sub">Works with Screaming Frog Free &amp; Paid</span>
+    </div>
+  </section>
+
+  <!-- VALUE PROP -->
+  <section id="value-prop" class="fade-in">
+    <div class="container">
+      <p>Run a Screaming Frog crawl?<br>Drop the CSV in. Ship fixes today&mdash;not next quarter.</p>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features">
+    <div class="container">
+
+      <!-- Core Features -->
+      <div class="features-group fade-in">
+        <div class="features-group-header">
+          <h2>Drop CSV. Fix in Minutes.</h2>
+        </div>
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon">&#x1F517;</div>
+            <h3>Broken Links</h3>
+            <p>Fix or redirect in bulk</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">&#x21A9;&#xFE0F;</div>
+            <h3>Redirect Chains</h3>
+            <p>Flatten chains, reclaim link equity</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">&#x1F5BC;&#xFE0F;</div>
+            <h3>Image Alt Text</h3>
+            <p>AI-generated, bulk-applied</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">&#x1F4DD;</div>
+            <h3>Page Titles</h3>
+            <p>Fix missing or duplicates</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">&#x1F4C4;</div>
+            <h3>Meta Descriptions</h3>
+            <p>AI-assisted bulk updates</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">&#x1F47B;</div>
+            <h3>Orphan Pages</h3>
+            <p>Find and reconnect stranded pages</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Advanced Modules -->
+      <div class="features-group fade-in">
+        <div class="advanced-bg">
+          <div class="features-group-header">
+            <h2>Advanced Modules</h2>
+          </div>
+          <div class="features-grid">
+            <div class="feature-card">
+              <div class="feature-icon">&#x1F500;</div>
+              <h3>Internal Links</h3>
+              <p>Build topical clusters automatically</p>
+            </div>
+            <div class="feature-card">
+              <div class="feature-icon">&#x1F519;</div>
+              <h3>Backlink Reclamation</h3>
+              <p>Recover lost link equity</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- WHO IT'S FOR -->
+  <section id="who" class="fade-in">
+    <div class="container">
+      <h2>Who It's For</h2>
+      <ul class="who-list">
+        <li>In-house SEOs tired of dev backlogs</li>
+        <li>Agencies managing multiple WP sites</li>
+        <li>Freelancers who bill for results, not waiting</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section id="how" class="fade-in">
+    <div class="container">
+      <h2>How It Works</h2>
+      <div class="timeline">
+        <div class="timeline-step">
+          <div class="step-number">1</div>
+          <h3>Export from Screaming Frog</h3>
+          <p>Run your crawl like you always do</p>
+        </div>
+        <div class="timeline-step">
+          <div class="step-number">2</div>
+          <h3>Drop CSV into the plugin</h3>
+          <p>Upload directly in WordPress</p>
+        </div>
+        <div class="timeline-step">
+          <div class="step-number">3</div>
+          <h3>Review and apply fixes in bulk</h3>
+          <p>One click. Hundreds of fixes. Done.</p>
+        </div>
+        <div class="timeline-step">
+          <div class="step-number">4</div>
+          <h3>Download your change log</h3>
+          <p>Document everything. Show your work. Make your boss/client happy.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOCUMENT EVERYTHING -->
+  <section id="changelog" class="fade-in">
+    <div class="container">
+      <h2>&#x1F4CB; Download a complete change log after every fix.</h2>
+      <p>Track what changed. Share results with clients. Prove ROI to your boss. Cover your ass.</p>
+    </div>
+  </section>
+
+  <!-- SCREENSHOT -->
+  <section id="screenshot" class="fade-in">
+    <div class="container">
+      <div class="screenshot-placeholder">[Plugin UI screenshot]</div>
+      <p>Upload your Screaming Frog CSV, review the fixes, and apply them all at once.</p>
+    </div>
+  </section>
+
+  <!-- INTEGRATIONS -->
+  <section id="integrations" class="fade-in">
+    <div class="container">
+      <h2>Integrations</h2>
+      <p class="subtitle">Works with the tools you already use</p>
+      <div class="integration-pills">
+        <span class="integration-pill">Screaming Frog</span>
+        <span class="integration-pill">Claude AI</span>
+        <span class="integration-pill">Rank Math</span>
+        <span class="integration-pill">Yoast</span>
+        <span class="integration-pill">AIOSEO</span>
+        <span class="integration-pill">Redirection</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- TESTIMONIALS -->
+  <section id="testimonials" class="fade-in">
+    <div class="container">
+      <h2>What Early Adopters Are Saying</h2>
+      <div class="testimonials-grid">
+        <div class="testimonial-card">
+          <blockquote>My redirect chain ticket sat in Jira for 37 days. Fixed it myself in 11 minutes. Sorry not sorry, engineering.</blockquote>
+          <cite>&mdash; In-house SEO</cite>
+        </div>
+        <div class="testimonial-card">
+          <blockquote>My boss asked how I shipped 200 fixes in a week. I said 'process improvement.' He doesn't need to know.</blockquote>
+          <cite>&mdash; Agency SEO</cite>
+        </div>
+        <div class="testimonial-card">
+          <blockquote>Engineering said Q3. I said Tuesday. Tuesday won.</blockquote>
+          <cite>&mdash; Marketing Manager</cite>
+        </div>
+        <div class="testimonial-card">
+          <blockquote>I used to export CSVs and pray. Now I export CSVs and actually fix things.</blockquote>
+          <cite>&mdash; Freelance Consultant</cite>
+        </div>
+        <div class="testimonial-card">
+          <blockquote>I sent my client a change log showing 147 fixes in one afternoon. They thought I worked all week.</blockquote>
+          <cite>&mdash; Agency Owner</cite>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section id="final-cta" class="fade-in">
+    <div class="container">
+      <h2>Your crawl data shouldn't die in a spreadsheet.</h2>
+      <a href="#" class="cta">Get the Plugin &rarr;</a>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 Screaming Fixes</p>
+      <div class="footer-links">
+        <a href="https://github.com/backofnapkin/screaming-fixes">GitHub</a> &middot; Built by an SEO, for SEOs
+      </div>
+    </div>
+  </footer>
+
+  <!-- Fade-in on scroll -->
+  <script>
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+  </script>
+
 </body>
 </html>
