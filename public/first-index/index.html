@@ -67,25 +67,79 @@
     z-index: 1;
   }
 
-  /* Top bar */
-  .top-bar {
+  /* Site Header */
+  .site-header {
+    padding: 24px 0;
+    border-bottom: 1px solid var(--mid-gray);
+    margin-bottom: 60px;
+  }
+
+  .header-inner {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 60px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid var(--mid-gray);
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 0 24px;
   }
 
-  .top-bar .logo {
+  .logo {
     font-family: 'Space Mono', monospace;
-    font-size: 11px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 3px;
     color: var(--text-gray);
+    text-decoration: none;
+    transition: color 0.2s;
   }
 
-  .top-bar .status {
+  .logo:hover {
+    color: var(--accent);
+  }
+
+  .header-nav {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 24px;
+  }
+
+  .nav-link {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-gray);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .nav-link:hover {
+    color: var(--accent);
+  }
+
+  .header-cta {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #fff;
+    background: var(--accent);
+    padding: 10px 20px;
+    text-decoration: none;
+    transition: background 0.2s;
+  }
+
+  .header-cta:hover {
+    background: #006644;
+  }
+
+  /* Status badge */
+  .status-badge {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -94,6 +148,7 @@
     text-transform: uppercase;
     letter-spacing: 2px;
     color: var(--accent);
+    margin-bottom: 40px;
   }
 
   .status-dot {
@@ -353,10 +408,13 @@
   }
 
   /* Footer */
-  .footer {
+  .site-footer {
     margin-top: 60px;
     padding-top: 24px;
     border-top: 1px solid var(--dark-gray);
+  }
+
+  .footer-inner {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -374,6 +432,16 @@
     font-size: 12px;
     color: var(--text-gray);
     font-weight: 300;
+  }
+
+  .footer-right a {
+    color: var(--text-gray);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .footer-right a:hover {
+    color: var(--accent);
   }
 
   /* Animations */
@@ -395,14 +463,25 @@
   .delay-6 { animation-delay: 0.6s; }
   .delay-7 { animation-delay: 0.7s; }
 
+  @media (max-width: 768px) {
+    .header-nav {
+      display: none;
+    }
+
+    .footer-inner {
+      flex-direction: column;
+      gap: 16px;
+      text-align: center;
+    }
+  }
+
   @media (max-width: 540px) {
     .container { padding: 40px 18px 60px; }
+    .header-inner { padding: 0 18px; }
     .email-form { flex-direction: column; }
     .email-form input[type="email"] { border-right: 1px solid var(--mid-gray); border-bottom: none; }
     .email-form button { padding: 16px; }
     .cta-block { padding: 28px 20px; }
-    .top-bar { flex-direction: column; gap: 12px; align-items: flex-start; }
-    .footer { flex-direction: column; gap: 12px; align-items: flex-start; }
   }
 </style>
 </head>
@@ -410,11 +489,24 @@
 
 <div class="bg-grid"></div>
 
+<!-- HEADER -->
+<header class="site-header">
+  <div class="header-inner">
+    <a href="/" class="logo">Screaming Fixes</a>
+    <nav class="header-nav">
+      <div class="nav-links">
+        <a href="/tools" class="nav-link">Tools</a>
+        <a href="/tutorials" class="nav-link">Tutorials</a>
+      </div>
+      <a href="/first-index" class="header-cta">Join First Index</a>
+    </nav>
+  </div>
+</header>
+
 <div class="container">
 
-  <div class="top-bar fade-up">
-    <div class="logo">Screaming Fixes</div>
-    <div class="status"><span class="status-dot"></span> Accepting Members</div>
+  <div class="status-badge fade-up">
+    <span class="status-dot"></span> Accepting Members
   </div>
 
   <div class="hero-label fade-up delay-1">Private Group</div>
@@ -483,10 +575,18 @@
     <p>If you're looking for beginner SEO tips or recycled marketing advice, this isn't it. First Index is for practitioners — agency operators, in-house leads, and independents who are already deep in the work and want to push further into automation and AI-driven search.</p>
   </div>
 
-  <div class="footer fade-up delay-7">
-    <div class="footer-left">First Index © 2025</div>
-    <div class="footer-right">A Screaming Fixes project</div>
-  </div>
+  <footer class="site-footer fade-up delay-7">
+    <div class="footer-inner">
+      <div class="footer-left">Screaming Fixes &copy; 2025</div>
+      <div class="footer-right">
+        <a href="/tools">Tools</a> &middot;
+        <a href="/tutorials">Tutorials</a> &middot;
+        <a href="/first-index">Join First Index</a> &middot;
+        <a href="/about">About</a> &middot;
+        <a href="/contact">Contact</a>
+      </div>
+    </div>
+  </footer>
 
 </div>
 
