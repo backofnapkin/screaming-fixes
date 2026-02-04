@@ -15,282 +15,448 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔧</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --bg: #ffffff;
+      --bg-alt: #f7f7f7;
+      --border: #e8e8e8;
+      --border-light: #d0d0d0;
+      --text: #111111;
+      --text-secondary: #444444;
+      --text-muted: #666666;
+      --accent: #00875a;
+      --accent-hover: #006644;
+      --accent-dim: #00875a11;
+      --accent-mid: #00875a22;
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     html { scroll-behavior: smooth; }
 
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      color: #1a1a1a;
-      background: #ffffff;
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text);
+      background: var(--bg);
       font-size: 18px;
       line-height: 1.6;
       -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Scanline overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.01) 2px,
+        rgba(0,0,0,0.01) 4px
+      );
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    /* Grid background */
+    .bg-grid {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image:
+        linear-gradient(var(--accent-dim) 1px, transparent 1px),
+        linear-gradient(90deg, var(--accent-dim) 1px, transparent 1px);
+      background-size: 60px 60px;
+      opacity: 0.3;
+      mask-image: radial-gradient(ellipse at 50% 0%, black 0%, transparent 50%);
+      -webkit-mask-image: radial-gradient(ellipse at 50% 0%, black 0%, transparent 50%);
+      pointer-events: none;
     }
 
     .container {
-      max-width: 1140px;
+      position: relative;
+      max-width: 1100px;
       margin: 0 auto;
       padding: 0 24px;
+      z-index: 1;
+    }
+
+    .container-narrow {
+      max-width: 720px;
+    }
+
+    /* Section label */
+    .section-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      color: var(--accent);
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .section-label::before {
+      content: '';
+      width: 24px;
+      height: 1px;
+      background: var(--accent);
+    }
+
+    /* Divider */
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, var(--accent), transparent);
+      margin: 64px 0;
+      opacity: 0.3;
     }
 
     /* Fade-in animation */
     .fade-in {
       opacity: 0;
       transform: translateY(20px);
-      transition: opacity 0.3s ease, transform 0.3s ease;
+      transition: opacity 0.6s ease, transform 0.6s ease;
     }
     .fade-in.visible {
       opacity: 1;
       transform: translateY(0);
     }
 
+    /* ---- HEADER ---- */
+    .site-header {
+      padding: 24px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+
+    .logo:hover {
+      color: var(--accent);
+    }
+
+    .header-cta {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: #fff;
+      background: var(--accent);
+      padding: 10px 20px;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+
+    .header-cta:hover {
+      background: var(--accent-hover);
+    }
+
     /* ---- HERO ---- */
     #hero {
       padding: 100px 0 80px;
       text-align: center;
-      background: #fafafa;
     }
-    .badge {
-      display: inline-block;
-      border: 1.5px solid #14b8a6;
-      color: #14b8a6;
-      font-size: 13px;
-      font-weight: 600;
-      padding: 4px 14px;
-      border-radius: 999px;
-      margin-bottom: 24px;
-      letter-spacing: 0.02em;
+
+    .hero-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 4px;
+      color: var(--accent);
+      margin-bottom: 32px;
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
     }
+
+    .hero-label::before,
+    .hero-label::after {
+      content: '';
+      width: 24px;
+      height: 1px;
+      background: var(--accent);
+    }
+
     #hero h1 {
-      font-size: 56px;
+      font-family: 'Outfit', sans-serif;
+      font-size: clamp(40px, 6vw, 64px);
       font-weight: 700;
-      letter-spacing: -0.025em;
-      line-height: 1.1;
+      letter-spacing: -2px;
+      line-height: 1.05;
       margin-bottom: 24px;
     }
-    #hero h1 span { display: block; }
-    #hero .subtitle {
-      font-size: 20px;
-      color: #555;
-      max-width: 600px;
-      margin: 0 auto 12px;
-      line-height: 1.5;
+
+    #hero h1 span {
+      display: block;
     }
-    #hero .subtitle-bold {
+
+    #hero h1 .accent {
+      color: var(--accent);
+    }
+
+    .hero-subtitle {
       font-size: 20px;
       font-weight: 600;
-      color: #333;
-      max-width: 600px;
-      margin: 0 auto 8px;
+      color: var(--text);
+      margin-bottom: 8px;
     }
-    #hero .punchline {
+
+    .hero-desc {
       font-size: 18px;
-      color: #777;
-      margin-bottom: 36px;
+      font-weight: 300;
+      color: var(--text-muted);
+      max-width: 560px;
+      margin: 0 auto 12px;
     }
+
+    .hero-punchline {
+      font-size: 16px;
+      color: var(--text-muted);
+      margin-bottom: 40px;
+      font-weight: 300;
+    }
+
     .cta {
       display: inline-block;
-      background: #14b8a6;
+      background: var(--accent);
       color: #fff;
-      font-size: 18px;
-      font-weight: 600;
-      padding: 16px 36px;
-      border-radius: 8px;
+      font-family: 'Space Mono', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      padding: 16px 32px;
       text-decoration: none;
       transition: background 0.2s ease, transform 0.2s ease;
     }
+
     .cta:hover {
-      background: #0d9488;
-      transform: translateY(-1px);
+      background: var(--accent-hover);
+      transform: translateY(-2px);
     }
+
     .cta-sub {
       display: block;
-      margin-top: 12px;
-      font-size: 14px;
-      color: #999;
-    }
-
-    /* ---- VALUE PROP ---- */
-    #value-prop {
-      padding: 80px 0;
-      text-align: center;
-    }
-    #value-prop p {
-      font-size: 24px;
-      font-weight: 600;
-      color: #333;
-      max-width: 640px;
-      margin: 0 auto;
-      line-height: 1.5;
-    }
-
-    /* ---- FEATURES ---- */
-    #features { padding: 0 0 80px; }
-
-    .features-group { margin-bottom: 64px; }
-    .features-group:last-child { margin-bottom: 0; }
-
-    .features-group-header {
-      text-align: center;
-      margin-bottom: 40px;
-    }
-    .features-group-header h2 {
-      font-size: 14px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #14b8a6;
-    }
-
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 24px;
-    }
-
-    .feature-card {
-      background: #fff;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      padding: 32px 28px;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    .feature-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-    }
-    .feature-icon {
-      width: 52px;
-      height: 52px;
-      background: #f0fdfa;
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
-      margin-bottom: 16px;
-    }
-    .feature-card h3 {
-      font-size: 18px;
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
-    .feature-card p {
-      font-size: 15px;
-      color: #666;
-    }
-
-    .advanced-bg {
-      background: #f9fafb;
-      border-radius: 16px;
-      padding: 48px 40px;
-    }
-
-    /* ---- WHO IT'S FOR ---- */
-    #who {
-      padding: 80px 0;
-      text-align: center;
-    }
-    #who h2 {
-      font-size: 32px;
-      font-weight: 600;
-      margin-bottom: 32px;
-    }
-    .who-list {
-      list-style: none;
-      max-width: 520px;
-      margin: 0 auto;
-      text-align: left;
-    }
-    .who-list li {
-      font-size: 18px;
-      padding: 10px 0;
-      display: flex;
-      align-items: baseline;
-      gap: 12px;
-    }
-    .who-list li::before {
-      content: "\2713";
-      color: #14b8a6;
-      font-weight: 700;
-      flex-shrink: 0;
+      margin-top: 16px;
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 300;
     }
 
     /* ---- HOW IT WORKS ---- */
     #how {
       padding: 80px 0;
-      background: #ffffff;
-    }
-    #how h2 {
-      font-size: 32px;
-      font-weight: 600;
-      text-align: center;
-      margin-bottom: 56px;
     }
 
-    .timeline {
-      max-width: 600px;
+    #how .section-label {
+      text-align: center;
+      justify-content: center;
+    }
+
+    #how .section-label::before {
+      display: none;
+    }
+
+    .steps {
+      max-width: 640px;
       margin: 0 auto;
-      position: relative;
-      padding-left: 60px;
     }
-    .timeline::before {
-      content: '';
-      position: absolute;
-      left: 20px;
-      top: 4px;
-      bottom: 4px;
-      width: 2px;
-      background: #d1d5db;
+
+    .step {
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      gap: 20px;
+      padding: 28px 0;
+      border-bottom: 1px solid var(--border);
+      align-items: start;
     }
-    .timeline-step {
-      position: relative;
-      margin-bottom: 48px;
+
+    .step:last-child {
+      border-bottom: none;
     }
-    .timeline-step:last-child { margin-bottom: 0; }
+
     .step-number {
-      position: absolute;
-      left: -60px;
-      top: 0;
-      width: 40px;
-      height: 40px;
-      background: #14b8a6;
+      width: 48px;
+      height: 48px;
+      background: var(--accent);
       color: #fff;
-      border-radius: 50%;
+      font-family: 'Space Mono', monospace;
+      font-size: 18px;
+      font-weight: 700;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 16px;
-      font-weight: 700;
-      z-index: 1;
     }
-    .timeline-step h3 {
-      font-size: 20px;
+
+    .step h3 {
+      font-size: 18px;
       font-weight: 600;
       margin-bottom: 4px;
     }
-    .timeline-step p {
-      font-size: 16px;
-      color: #666;
+
+    .step p {
+      font-size: 15px;
+      color: var(--text-muted);
+      font-weight: 300;
     }
 
-    /* ---- DOCUMENT EVERYTHING ---- */
+    /* ---- VALUE PROP ---- */
+    #value-prop {
+      padding: 64px 0;
+      text-align: center;
+      background: var(--bg-alt);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    #value-prop p {
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--text);
+      max-width: 600px;
+      margin: 0 auto;
+      line-height: 1.5;
+    }
+
+    /* ---- FEATURES ---- */
+    #features {
+      padding: 80px 0;
+    }
+
+    .features-header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+    }
+
+    .feature-card {
+      background: var(--bg);
+      padding: 32px 28px;
+      transition: background 0.2s ease;
+    }
+
+    .feature-card:hover {
+      background: var(--bg-alt);
+    }
+
+    .feature-icon {
+      font-family: 'Space Mono', monospace;
+      font-size: 16px;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    .feature-card h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .feature-card p {
+      font-size: 14px;
+      color: var(--text-muted);
+      font-weight: 300;
+      line-height: 1.5;
+    }
+
+    /* Advanced modules */
+    .advanced-section {
+      margin-top: 64px;
+      padding: 48px;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      position: relative;
+    }
+
+    .advanced-section::before {
+      content: '';
+      position: absolute;
+      top: -1px;
+      left: 0;
+      width: 120px;
+      height: 3px;
+      background: var(--accent);
+    }
+
+    .advanced-section .section-label {
+      margin-bottom: 32px;
+    }
+
+    .advanced-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .advanced-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 28px 24px;
+      transition: border-color 0.2s;
+    }
+
+    .advanced-card:hover {
+      border-color: var(--accent);
+    }
+
+    .advanced-card .feature-icon {
+      margin-bottom: 12px;
+    }
+
+    .advanced-card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .advanced-card p {
+      font-size: 14px;
+      color: var(--text-muted);
+      font-weight: 300;
+    }
+
+    /* ---- CHANGELOG ---- */
     #changelog {
       padding: 80px 0;
       text-align: center;
+      border-top: 1px solid var(--border);
     }
+
     #changelog h2 {
-      font-size: 32px;
+      font-size: 28px;
       font-weight: 600;
       margin-bottom: 16px;
+      letter-spacing: -1px;
     }
+
     #changelog p {
-      font-size: 18px;
-      color: #555;
-      max-width: 640px;
+      font-size: 17px;
+      color: var(--text-muted);
+      font-weight: 300;
+      max-width: 560px;
       margin: 0 auto;
     }
 
@@ -299,385 +465,499 @@
       padding: 0 0 80px;
       text-align: center;
     }
+
     .screenshot-placeholder {
       max-width: 900px;
       margin: 0 auto 24px;
-      background: #f3f4f6;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
       height: 400px;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #999;
-      font-size: 16px;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--text-muted);
     }
+
     #screenshot p {
-      font-size: 16px;
-      color: #777;
+      font-size: 15px;
+      color: var(--text-muted);
       font-style: italic;
-      max-width: 600px;
+      font-weight: 300;
+      max-width: 560px;
       margin: 0 auto;
     }
 
     /* ---- INTEGRATIONS ---- */
     #integrations {
       padding: 80px 0;
-      background: #fafafa;
+      background: var(--bg-alt);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .integrations-header {
       text-align: center;
-    }
-    #integrations h2 {
-      font-size: 32px;
-      font-weight: 600;
-      margin-bottom: 12px;
-    }
-    #integrations .subtitle {
-      font-size: 18px;
-      color: #666;
       margin-bottom: 40px;
     }
+
+    .integrations-header h2 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .integrations-header p {
+      font-size: 15px;
+      color: var(--text-muted);
+      font-weight: 300;
+    }
+
     .integration-pills {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      gap: 16px;
+      gap: 12px;
     }
+
     .integration-pill {
-      background: #fff;
-      border: 1px solid #e5e7eb;
-      border-radius: 999px;
-      padding: 10px 24px;
-      font-size: 15px;
-      font-weight: 500;
-      color: #555;
-      transition: color 0.2s ease, border-color 0.2s ease;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 12px 24px;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-secondary);
+      transition: border-color 0.2s, color 0.2s;
     }
+
     .integration-pill:hover {
-      color: #14b8a6;
-      border-color: #14b8a6;
+      color: var(--accent);
+      border-color: var(--accent);
     }
 
     /* ---- TESTIMONIALS ---- */
     #testimonials {
       padding: 80px 0;
-      background: #f0fdfa;
     }
-    #testimonials h2 {
-      font-size: 32px;
-      font-weight: 600;
+
+    .testimonials-header {
       text-align: center;
       margin-bottom: 48px;
     }
+
     .testimonials-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 24px;
     }
+
     .testimonial-card {
-      background: #fff;
-      border-radius: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
       padding: 32px 28px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
       position: relative;
     }
+
     .testimonial-card::before {
-      content: "\201C";
+      content: '';
       position: absolute;
-      top: 16px;
-      left: 20px;
-      font-size: 64px;
-      color: #e5e7eb;
-      line-height: 1;
-      font-family: Georgia, serif;
+      top: -1px;
+      left: 0;
+      width: 40px;
+      height: 2px;
+      background: var(--accent);
     }
+
     .testimonial-card blockquote {
-      font-size: 16px;
-      font-style: italic;
-      color: #333;
-      margin-bottom: 16px;
-      position: relative;
-      z-index: 1;
-    }
-    .testimonial-card cite {
-      font-size: 14px;
+      font-size: 15px;
       font-style: normal;
-      color: #888;
+      color: var(--text);
+      margin-bottom: 20px;
+      line-height: 1.6;
+      font-weight: 400;
+    }
+
+    .testimonial-card cite {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      font-style: normal;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--text-muted);
     }
 
     /* ---- FINAL CTA ---- */
     #final-cta {
       padding: 100px 0;
       text-align: center;
+      background: var(--bg-alt);
+      border-top: 1px solid var(--border);
     }
+
     #final-cta h2 {
-      font-size: 36px;
+      font-size: 32px;
       font-weight: 700;
-      margin-bottom: 32px;
-      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+      letter-spacing: -1px;
+    }
+
+    #final-cta .tagline {
+      font-size: 17px;
+      color: var(--text-muted);
+      font-weight: 300;
+      margin-bottom: 36px;
     }
 
     /* ---- FOOTER ---- */
     footer {
       padding: 40px 0;
-      text-align: center;
-      border-top: 1px solid #e5e7eb;
-      font-size: 14px;
-      color: #999;
+      border-top: 1px solid var(--border);
     }
-    footer a {
-      color: #999;
+
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer-left {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--text-muted);
+    }
+
+    .footer-right {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 300;
+    }
+
+    .footer-right a {
+      color: var(--text-muted);
       text-decoration: none;
       transition: color 0.2s;
     }
-    footer a:hover { color: #14b8a6; }
-    footer .footer-links {
-      margin-top: 8px;
+
+    .footer-right a:hover {
+      color: var(--accent);
     }
-    footer .footer-links a { margin: 0 8px; }
+
+    .footer-disclaimer {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 300;
+      max-width: 640px;
+      margin-left: auto;
+      margin-right: auto;
+      text-align: center;
+    }
+
+    .footer-disclaimer a {
+      color: var(--text-muted);
+      text-decoration: underline;
+    }
 
     /* ---- RESPONSIVE ---- */
     @media (max-width: 1024px) {
       .features-grid { grid-template-columns: repeat(2, 1fr); }
+      .advanced-grid { grid-template-columns: repeat(2, 1fr); }
       .testimonials-grid { grid-template-columns: repeat(2, 1fr); }
     }
+
     @media (max-width: 768px) {
       #hero { padding: 64px 0 48px; }
-      #hero h1 { font-size: 36px; }
-      #hero .subtitle, #hero .subtitle-bold { font-size: 17px; }
-      section, #value-prop, #who, #how, #changelog, #screenshot, #integrations, #testimonials, #final-cta {
+      #hero h1 { font-size: 36px; letter-spacing: -1px; }
+      .hero-subtitle { font-size: 18px; }
+      .hero-desc { font-size: 16px; }
+
+      section, #how, #features, #changelog, #screenshot, #integrations, #testimonials {
         padding: 48px 0;
       }
-      h2 { font-size: 26px !important; }
+
       .features-grid { grid-template-columns: 1fr; }
+      .advanced-grid { grid-template-columns: 1fr; }
+      .advanced-section { padding: 32px 24px; }
       .testimonials-grid { grid-template-columns: 1fr; }
-      .advanced-bg { padding: 32px 20px; }
-      #final-cta h2 { font-size: 28px; }
+
+      #final-cta { padding: 64px 0; }
+      #final-cta h2 { font-size: 26px; }
+
+      .footer-inner {
+        flex-direction: column;
+        gap: 16px;
+        text-align: center;
+      }
+
+      .header-inner {
+        flex-direction: column;
+        gap: 16px;
+      }
+    }
+
+    @media (max-width: 540px) {
+      .container { padding: 0 18px; }
+      .hero-label::before,
+      .hero-label::after { width: 16px; }
+      .step { grid-template-columns: 40px 1fr; gap: 16px; }
+      .step-number { width: 40px; height: 40px; font-size: 16px; }
     }
   </style>
 </head>
 <body>
 
-  <!-- HERO -->
-  <section id="hero">
-    <div class="container">
-      <span class="badge">WordPress Plugin</span>
-      <h1>
-        <span>Finding SEO problems is easy.</span>
-        <span>Fixing them sucks.</span>
-      </h1>
-      <p class="subtitle-bold">Screaming Frog tells you what's broken.</p>
-      <p class="subtitle">Screaming Fixes makes it fixed&mdash;in bulk, directly in WordPress.</p>
-      <p class="punchline">No dev tickets. No Jira. No waiting until Q3.</p>
-      <a href="#" class="cta">Get the WordPress Plugin &rarr;</a>
-      <span class="cta-sub">100% free. No premium tier. Just the whole dang plugin.</span>
-    </div>
-  </section>
+<div class="bg-grid"></div>
 
-  <!-- HOW IT WORKS -->
-  <section id="how" class="fade-in">
-    <div class="container">
-      <h2>How It Works</h2>
-      <div class="timeline">
-        <div class="timeline-step">
-          <div class="step-number">1</div>
+<!-- HEADER -->
+<header class="site-header">
+  <div class="container">
+    <div class="header-inner">
+      <a href="/" class="logo">Screaming Fixes</a>
+      <a href="#" class="header-cta">Get Plugin</a>
+    </div>
+  </div>
+</header>
+
+<!-- HERO -->
+<section id="hero">
+  <div class="container">
+    <span class="hero-label">WordPress Plugin</span>
+    <h1>
+      <span>Finding SEO problems is easy.</span>
+      <span>Fixing them <span class="accent">sucks.</span></span>
+    </h1>
+    <p class="hero-subtitle">Screaming Frog tells you what's broken.</p>
+    <p class="hero-desc">Screaming Fixes makes it fixed&mdash;in bulk, directly in WordPress.</p>
+    <p class="hero-punchline">No dev tickets. No Jira. No waiting until Q3.</p>
+    <a href="#" class="cta">Get the Plugin &rarr;</a>
+    <span class="cta-sub">100% free. No premium tier. Just the whole dang plugin.</span>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how" class="fade-in">
+  <div class="container">
+    <div class="section-label">How It Works</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <div>
           <h3>Export from Screaming Frog</h3>
           <p>Run your crawl like you always do.</p>
         </div>
-        <div class="timeline-step">
-          <div class="step-number">2</div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <div>
           <h3>Drop CSV into the plugin</h3>
           <p>Upload directly in WordPress. We support 10+ report types&mdash;and growing.</p>
         </div>
-        <div class="timeline-step">
-          <div class="step-number">3</div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div>
           <h3>Review and apply fixes in bulk</h3>
           <p>One click. Hundreds of fixes. Done.</p>
         </div>
-        <div class="timeline-step">
-          <div class="step-number">4</div>
+      </div>
+      <div class="step">
+        <div class="step-number">4</div>
+        <div>
           <h3>Download your change log</h3>
           <p>Document everything. Show your work. Make your boss happy.</p>
         </div>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- VALUE PROP -->
-  <section id="value-prop" class="fade-in">
-    <div class="container">
-      <p>Run a Screaming Frog crawl?<br>Drop the CSV in. Ship fixes today&mdash;not next quarter.</p>
+<!-- VALUE PROP -->
+<section id="value-prop" class="fade-in">
+  <div class="container">
+    <p>Run a Screaming Frog crawl?<br>Drop the CSV in. Ship fixes today&mdash;not next quarter.</p>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features" class="fade-in">
+  <div class="container">
+    <div class="features-header">
+      <div class="section-label" style="justify-content: center;">Drop CSV. Fix in Minutes.</div>
     </div>
-  </section>
-
-  <!-- FEATURES -->
-  <section id="features">
-    <div class="container">
-
-      <!-- Core Features -->
-      <div class="features-group fade-in">
-        <div class="features-group-header">
-          <h2>Drop CSV. Fix in Minutes.</h2>
-        </div>
-        <div class="features-grid">
-          <div class="feature-card">
-            <div class="feature-icon">&#x1F517;</div>
-            <h3>Broken Links</h3>
-            <p>Fix or redirect in bulk</p>
-          </div>
-          <div class="feature-card">
-            <div class="feature-icon">&#x21A9;&#xFE0F;</div>
-            <h3>Redirect Chains</h3>
-            <p>Flatten chains, reclaim link equity</p>
-          </div>
-          <div class="feature-card">
-            <div class="feature-icon">&#x1F5BC;&#xFE0F;</div>
-            <h3>Image Alt Text</h3>
-            <p>AI-generated, bulk-applied</p>
-          </div>
-          <div class="feature-card">
-            <div class="feature-icon">&#x1F4DD;</div>
-            <h3>Page Titles</h3>
-            <p>Fix missing or duplicates</p>
-          </div>
-          <div class="feature-card">
-            <div class="feature-icon">&#x1F4C4;</div>
-            <h3>Meta Descriptions</h3>
-            <p>AI-assisted bulk updates</p>
-          </div>
-          <div class="feature-card">
-            <div class="feature-icon">&#x1F47B;</div>
-            <h3>Orphan Pages</h3>
-            <p>Find and reconnect stranded pages</p>
-          </div>
-        </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">&rarr;</div>
+        <h3>Broken Links</h3>
+        <p>Fix or redirect in bulk</p>
       </div>
-
-      <!-- Advanced Modules -->
-      <div class="features-group fade-in">
-        <div class="advanced-bg">
-          <div class="features-group-header">
-            <h2>Advanced Modules</h2>
-          </div>
-          <div class="features-grid">
-            <div class="feature-card">
-              <div class="feature-icon">&#x1F500;</div>
-              <h3>Internal Links</h3>
-              <p>Build topical clusters automatically</p>
-            </div>
-            <div class="feature-card">
-              <div class="feature-icon">&#x1F519;</div>
-              <h3>Backlink Reclamation</h3>
-              <p>Recover lost link equity</p>
-            </div>
-            <div class="feature-card">
-              <div class="feature-icon">&#x1F4CA;</div>
-              <h3>Backlink Evaluator</h3>
-              <p>Premium backlink data from DataForSEO&mdash;free</p>
-            </div>
-          </div>
-        </div>
+      <div class="feature-card">
+        <div class="feature-icon">&rarr;</div>
+        <h3>Redirect Chains</h3>
+        <p>Flatten chains, reclaim link equity</p>
       </div>
-
-    </div>
-  </section>
-
-  <!-- DOCUMENT EVERYTHING -->
-  <section id="changelog" class="fade-in">
-    <div class="container">
-      <h2>&#x1F4CB; Download a complete change log after every fix.</h2>
-      <p>Track what changed. Share results with clients. Prove ROI to your boss. Cover your buns.</p>
-    </div>
-  </section>
-
-  <!-- SCREENSHOT -->
-  <section id="screenshot" class="fade-in">
-    <div class="container">
-      <div class="screenshot-placeholder">[Plugin UI screenshot]</div>
-      <p>Upload your Screaming Frog CSV, review the fixes, and apply them all at once.</p>
-    </div>
-  </section>
-
-  <!-- INTEGRATIONS -->
-  <section id="integrations" class="fade-in">
-    <div class="container">
-      <h2>Integrations</h2>
-      <p class="subtitle">Works with the tools you already use</p>
-      <div class="integration-pills">
-        <span class="integration-pill">Screaming Frog</span>
-        <span class="integration-pill">Claude AI</span>
-        <span class="integration-pill">DataForSEO</span>
-        <span class="integration-pill">Rank Math</span>
-        <span class="integration-pill">Yoast</span>
-        <span class="integration-pill">AIOSEO</span>
-        <span class="integration-pill">Redirection</span>
+      <div class="feature-card">
+        <div class="feature-icon">&rarr;</div>
+        <h3>Image Alt Text</h3>
+        <p>AI-generated, bulk-applied</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&rarr;</div>
+        <h3>Page Titles</h3>
+        <p>Fix missing or duplicates</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&rarr;</div>
+        <h3>Meta Descriptions</h3>
+        <p>AI-assisted bulk updates</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&rarr;</div>
+        <h3>Orphan Pages</h3>
+        <p>Find and reconnect stranded pages</p>
       </div>
     </div>
-  </section>
 
-  <!-- TESTIMONIALS -->
-  <section id="testimonials" class="fade-in">
-    <div class="container">
-      <h2>What Early Adopters Are Saying</h2>
-      <div class="testimonials-grid">
-        <div class="testimonial-card">
-          <blockquote>My redirect chain ticket sat in Jira for 37 days. Fixed it myself in 11 minutes. Sorry not sorry, engineering.</blockquote>
-          <cite>&mdash; In-house SEO</cite>
+    <!-- Advanced Modules -->
+    <div class="advanced-section">
+      <div class="section-label">Advanced Modules</div>
+      <div class="advanced-grid">
+        <div class="advanced-card">
+          <div class="feature-icon">&rarr;</div>
+          <h3>Internal Links</h3>
+          <p>Build topical clusters automatically</p>
         </div>
-        <div class="testimonial-card">
-          <blockquote>My boss asked how I shipped 200 fixes in a week. I said 'process improvement.' He doesn't need to know.</blockquote>
-          <cite>&mdash; Agency SEO</cite>
+        <div class="advanced-card">
+          <div class="feature-icon">&rarr;</div>
+          <h3>Backlink Reclamation</h3>
+          <p>Recover lost link equity</p>
         </div>
-        <div class="testimonial-card">
-          <blockquote>Engineering said Q3. I said Tuesday. Tuesday won.</blockquote>
-          <cite>&mdash; Marketing Manager</cite>
-        </div>
-        <div class="testimonial-card">
-          <blockquote>I used to export CSVs and pray. Now I export CSVs and actually fix things.</blockquote>
-          <cite>&mdash; Freelance Consultant</cite>
-        </div>
-        <div class="testimonial-card">
-          <blockquote>I sent my client a change log showing 147 fixes in one afternoon. They thought I worked all week.</blockquote>
-          <cite>&mdash; Agency Owner</cite>
-        </div>
-        <div class="testimonial-card">
-          <blockquote>Client asked why their last agency never fixed these issues. I didn't have the heart to tell them it takes 30 minutes now.</blockquote>
-          <cite>&mdash; Freelance SEO</cite>
+        <div class="advanced-card">
+          <div class="feature-icon">&rarr;</div>
+          <h3>Backlink Evaluator</h3>
+          <p>Premium backlink data from DataForSEO&mdash;free</p>
         </div>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- FINAL CTA -->
-  <section id="final-cta" class="fade-in">
-    <div class="container">
-      <h2>What are you waiting for?<br>Declare dev independence.</h2>
-      <a href="#" class="cta">Get the Plugin &rarr;</a>
+<!-- DOCUMENT EVERYTHING -->
+<section id="changelog" class="fade-in">
+  <div class="container">
+    <div class="section-label" style="justify-content: center;">Change Tracking</div>
+    <h2>Download a complete change log after every fix.</h2>
+    <p>Track what changed. Share results with clients. Prove ROI to your boss. Cover your buns.</p>
+  </div>
+</section>
+
+<!-- SCREENSHOT -->
+<section id="screenshot" class="fade-in">
+  <div class="container">
+    <div class="screenshot-placeholder">Plugin UI Screenshot</div>
+    <p>Upload your Screaming Frog CSV, review the fixes, and apply them all at once.</p>
+  </div>
+</section>
+
+<!-- INTEGRATIONS -->
+<section id="integrations" class="fade-in">
+  <div class="container">
+    <div class="integrations-header">
+      <div class="section-label" style="justify-content: center;">Integrations</div>
+      <h2>Works with the tools you already use</h2>
     </div>
-  </section>
+    <div class="integration-pills">
+      <span class="integration-pill">Screaming Frog</span>
+      <span class="integration-pill">Claude AI</span>
+      <span class="integration-pill">DataForSEO</span>
+      <span class="integration-pill">Rank Math</span>
+      <span class="integration-pill">Yoast</span>
+      <span class="integration-pill">AIOSEO</span>
+      <span class="integration-pill">Redirection</span>
+    </div>
+  </div>
+</section>
 
-  <!-- FOOTER -->
-  <footer>
-    <div class="container">
-      <p>&copy; 2025 Screaming Fixes</p>
-      <div class="footer-links">
+<!-- TESTIMONIALS -->
+<section id="testimonials" class="fade-in">
+  <div class="container">
+    <div class="testimonials-header">
+      <div class="section-label" style="justify-content: center;">What SEOs Are Saying</div>
+    </div>
+    <div class="testimonials-grid">
+      <div class="testimonial-card">
+        <blockquote>"My redirect chain ticket sat in Jira for 37 days. Fixed it myself in 11 minutes. Sorry not sorry, engineering."</blockquote>
+        <cite>In-house SEO</cite>
+      </div>
+      <div class="testimonial-card">
+        <blockquote>"My boss asked how I shipped 200 fixes in a week. I said 'process improvement.' He doesn't need to know."</blockquote>
+        <cite>Agency SEO</cite>
+      </div>
+      <div class="testimonial-card">
+        <blockquote>"Engineering said Q3. I said Tuesday. Tuesday won."</blockquote>
+        <cite>Marketing Manager</cite>
+      </div>
+      <div class="testimonial-card">
+        <blockquote>"I used to export CSVs and pray. Now I export CSVs and actually fix things."</blockquote>
+        <cite>Freelance Consultant</cite>
+      </div>
+      <div class="testimonial-card">
+        <blockquote>"I sent my client a change log showing 147 fixes in one afternoon. They thought I worked all week."</blockquote>
+        <cite>Agency Owner</cite>
+      </div>
+      <div class="testimonial-card">
+        <blockquote>"Client asked why their last agency never fixed these issues. I didn't have the heart to tell them it takes 30 minutes now."</blockquote>
+        <cite>Freelance SEO</cite>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL CTA -->
+<section id="final-cta" class="fade-in">
+  <div class="container">
+    <div class="section-label" style="justify-content: center;">Ready?</div>
+    <h2>What are you waiting for?</h2>
+    <p class="tagline">Declare dev independence.</p>
+    <a href="#" class="cta">Get the Plugin &rarr;</a>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-left">Screaming Fixes &copy; 2025</div>
+      <div class="footer-right">
         <a href="https://github.com/backofnapkin/screaming-fixes">GitHub</a> &middot; Built by an SEO, for SEOs
       </div>
-      <p style="margin-top: 16px; font-size: 12px; color: #bbb; max-width: 560px; margin-left: auto; margin-right: auto;">Screaming Fixes is not affiliated with, sponsored by, or endorsed by <a href="https://www.screamingfrog.co.uk/seo-spider/" style="color: #bbb; text-decoration: underline;">Screaming Frog SEO Spider</a>. Just an independent project from someone who's used the tool for 10+ years and wants to help other marketers get even more value from it.</p>
     </div>
-  </footer>
+    <p class="footer-disclaimer">
+      Screaming Fixes is not affiliated with, sponsored by, or endorsed by <a href="https://www.screamingfrog.co.uk/seo-spider/">Screaming Frog SEO Spider</a>. Just an independent project from someone who's used the tool for 10+ years and wants to help other marketers get even more value from it.
+    </p>
+  </div>
+</footer>
 
-  <!-- Fade-in on scroll -->
-  <script>
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('visible');
-        }
-      });
-    }, { threshold: 0.1 });
+<!-- Fade-in on scroll -->
+<script>
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.1 });
 
-    document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
-  </script>
+  document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+</script>
 
 </body>
 </html>
