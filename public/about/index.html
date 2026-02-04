@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>About — Screaming Fixes</title>
+<meta name="description" content="The story behind Screaming Fixes: building the integration layer between finding SEO issues and actually fixing them.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-alt: #f7f7f7;
+    --border: #e8e8e8;
+    --border-light: #d0d0d0;
+    --text: #111111;
+    --text-secondary: #444444;
+    --text-muted: #666666;
+    --accent: #00875a;
+    --accent-hover: #006644;
+    --accent-dim: #00875a11;
+    --accent-mid: #00875a22;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    font-size: 18px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.01) 2px,
+      rgba(0,0,0,0.01) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  /* Grid background */
+  .bg-grid {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image:
+      linear-gradient(var(--accent-dim) 1px, transparent 1px),
+      linear-gradient(90deg, var(--accent-dim) 1px, transparent 1px);
+    background-size: 60px 60px;
+    opacity: 0.3;
+    mask-image: radial-gradient(ellipse at 50% 0%, black 0%, transparent 50%);
+    -webkit-mask-image: radial-gradient(ellipse at 50% 0%, black 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  .container {
+    position: relative;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+    z-index: 1;
+  }
+
+  /* Site Header */
+  .site-header {
+    padding: 24px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .logo:hover {
+    color: var(--accent);
+  }
+
+  .header-nav {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 24px;
+  }
+
+  .nav-link {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .nav-link:hover,
+  .nav-link.active {
+    color: var(--accent);
+  }
+
+  .header-cta {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #fff;
+    background: var(--accent);
+    padding: 10px 20px;
+    text-decoration: none;
+    transition: background 0.2s;
+  }
+
+  .header-cta:hover {
+    background: var(--accent-hover);
+  }
+
+  /* About Content */
+  .about-section {
+    padding: 80px 0;
+  }
+
+  .about-content {
+    max-width: 720px;
+  }
+
+  .about-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    color: var(--accent);
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .about-label::before {
+    content: '';
+    width: 30px;
+    height: 2px;
+    background: var(--accent);
+  }
+
+  h1 {
+    font-family: 'Outfit', sans-serif;
+    font-size: clamp(36px, 5vw, 48px);
+    font-weight: 700;
+    letter-spacing: -1px;
+    line-height: 1.1;
+    margin-bottom: 32px;
+  }
+
+  h1 .accent {
+    color: var(--accent);
+  }
+
+  .about-intro {
+    font-size: 20px;
+    color: var(--text-secondary);
+    margin-bottom: 48px;
+    line-height: 1.7;
+    font-weight: 300;
+  }
+
+  .about-body p {
+    margin-bottom: 24px;
+    color: var(--text-secondary);
+    line-height: 1.8;
+  }
+
+  .about-body p:last-child {
+    margin-bottom: 0;
+  }
+
+  .about-body strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  /* Divider */
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+    margin: 48px 0;
+    opacity: 0.4;
+  }
+
+  /* Author block */
+  .author-block {
+    display: grid;
+    grid-template-columns: 72px 1fr;
+    gap: 24px;
+    align-items: start;
+    margin: 48px 0;
+    padding: 32px 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .author-avatar {
+    width: 72px;
+    height: 72px;
+    background: var(--accent-dim);
+    border: 2px solid var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .author-info h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .author-info .role {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+  }
+
+  .author-info p {
+    font-size: 15px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+
+  /* CTA Section */
+  .cta-section {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    padding: 48px;
+    margin: 48px 0 0 0;
+  }
+
+  .cta-section h2 {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  .cta-section p {
+    color: var(--text-muted);
+    margin-bottom: 24px;
+    font-weight: 300;
+  }
+
+  .cta-section .email-link {
+    font-family: 'Space Mono', monospace;
+    font-size: 16px;
+    color: var(--accent);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: color 0.2s;
+  }
+
+  .cta-section .email-link:hover {
+    color: var(--accent-hover);
+  }
+
+  .consulting-note {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 15px;
+    color: var(--text-muted);
+  }
+
+  .consulting-note strong {
+    color: var(--text);
+  }
+
+  /* Footer */
+  footer {
+    padding: 40px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .footer-inner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .footer-left {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+  }
+
+  .footer-right {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 300;
+  }
+
+  .footer-right a {
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .footer-right a:hover {
+    color: var(--accent);
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .about-section { padding: 60px 0; }
+    h1 { font-size: 32px; }
+
+    .header-nav {
+      display: none;
+    }
+
+    .footer-inner {
+      flex-direction: column;
+      gap: 16px;
+      text-align: center;
+    }
+
+    .author-block {
+      grid-template-columns: 1fr;
+      text-align: center;
+    }
+
+    .author-avatar {
+      margin: 0 auto;
+    }
+
+    .cta-section {
+      padding: 32px 24px;
+    }
+  }
+
+  @media (max-width: 540px) {
+    .container { padding: 0 18px; }
+  }
+
+  /* Animations */
+  .fade-up {
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeUp 0.6s ease forwards;
+  }
+
+  @keyframes fadeUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .delay-1 { animation-delay: 0.1s; }
+  .delay-2 { animation-delay: 0.2s; }
+  .delay-3 { animation-delay: 0.3s; }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+
+<!-- HEADER -->
+<header class="site-header">
+  <div class="container">
+    <div class="header-inner">
+      <a href="/" class="logo">Screaming Fixes</a>
+      <nav class="header-nav">
+        <div class="nav-links">
+          <a href="/tools" class="nav-link">Tools</a>
+          <a href="/tutorials" class="nav-link">Tutorials</a>
+        </div>
+        <a href="/first-index" class="header-cta">Join First Index</a>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<!-- ABOUT -->
+<section class="about-section">
+  <div class="container">
+    <div class="about-content">
+
+      <div class="about-label fade-up">About</div>
+
+      <h1 class="fade-up delay-1">The gap between <span class="accent">finding</span> and <span class="accent">fixing</span></h1>
+
+      <p class="about-intro fade-up delay-2">
+        Every SEO knows the feeling: you run a crawl, export the CSV, and stare at hundreds of issues. Then you open a spreadsheet, document every fix, and wait weeks (or months) for someone else to actually implement them.
+      </p>
+
+      <div class="about-body fade-up delay-3">
+        <p>
+          I've been doing SEO for over 15 years. I've used every tool out there. They're great at telling you what's wrong. But <strong>none of them actually fix anything</strong>.
+        </p>
+        <p>
+          You end up with a spreadsheet of broken links, redirect chains, and missing alt text — a to-do list that sits in a queue behind "real" engineering work. Meanwhile, you're bleeding link equity and watching crawl budget go to waste.
+        </p>
+        <p>
+          <strong>Screaming Fixes is the integration layer I always wanted.</strong> It takes the audit data you already have and turns it into one-click fixes. No dev tickets. No waiting. No excuses.
+        </p>
+        <p>
+          This isn't about replacing the tools you already use. It's about closing the loop — taking action on what they find.
+        </p>
+      </div>
+
+      <div class="author-block fade-up delay-3">
+        <div class="author-avatar">BL</div>
+        <div class="author-info">
+          <h3>Brett Lindenberg</h3>
+          <div class="role">Builder, Screaming Fixes</div>
+          <p>15+ years in SEO and digital marketing. Building the tools I wish existed.</p>
+        </div>
+      </div>
+
+      <div class="cta-section fade-up delay-3">
+        <h2>Get in touch</h2>
+        <p>Questions about the plugin? Just want to talk shop? I read every email.</p>
+        <a href="mailto:brett.lindenberg@gmail.com" class="email-link">
+          brett.lindenberg@gmail.com →
+        </a>
+        <div class="consulting-note">
+          <strong>Need help with AI integrations?</strong> I also offer consulting and implementation services for businesses looking to integrate AI into their workflows. <a href="/consulting" style="color: var(--accent);">Learn more →</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-left">Screaming Fixes &copy; 2026</div>
+      <div class="footer-right">
+        <a href="/tools">Tools</a> &middot;
+        <a href="/tutorials">Tutorials</a> &middot;
+        <a href="/first-index">Join First Index</a> &middot;
+        <a href="/about">About</a> &middot;
+        <a href="/contact">Contact</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
