@@ -152,6 +152,31 @@
       color: var(--accent);
     }
 
+    .header-nav {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 24px;
+    }
+
+    .nav-link {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .nav-link:hover {
+      color: var(--accent);
+    }
+
     .header-cta {
       font-family: 'Space Mono', monospace;
       font-size: 11px;
@@ -700,7 +725,7 @@
         text-align: center;
       }
 
-      .header-cta {
+      .header-nav {
         display: none;
       }
     }
@@ -723,7 +748,13 @@
   <div class="container">
     <div class="header-inner">
       <a href="/" class="logo">Screaming Fixes</a>
-      <a href="#" class="header-cta">Get Plugin</a>
+      <nav class="header-nav">
+        <div class="nav-links">
+          <a href="/tools" class="nav-link">Tools</a>
+          <a href="/tutorials" class="nav-link">Tutorials</a>
+        </div>
+        <a href="/first-index" class="header-cta">Join First Index</a>
+      </nav>
     </div>
   </div>
 </header>
@@ -938,7 +969,11 @@
     <div class="footer-inner">
       <div class="footer-left">Screaming Fixes &copy; 2025</div>
       <div class="footer-right">
-        <a href="https://github.com/backofnapkin/screaming-fixes">GitHub</a> &middot; Built by an SEO, for SEOs
+        <a href="/tools">Tools</a> &middot;
+        <a href="/tutorials">Tutorials</a> &middot;
+        <a href="/first-index">Join First Index</a> &middot;
+        <a href="/about">About</a> &middot;
+        <a href="/contact">Contact</a>
       </div>
     </div>
     <p class="footer-disclaimer">
