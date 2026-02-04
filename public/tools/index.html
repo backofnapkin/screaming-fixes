@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tools — Screaming Fixes</title>
+<meta name="description" content="9 bulk SEO fix modules: broken links, redirects, alt text, titles, meta descriptions, internal links, orphan pages, and backlink tools powered by DataForSEO.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-alt: #f7f7f7;
+    --border: #e8e8e8;
+    --border-light: #d0d0d0;
+    --text: #111111;
+    --text-secondary: #444444;
+    --text-muted: #666666;
+    --accent: #00875a;
+    --accent-hover: #006644;
+    --accent-dim: #00875a11;
+    --accent-mid: #00875a22;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    font-size: 18px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.01) 2px,
+      rgba(0,0,0,0.01) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  /* Grid background */
+  .bg-grid {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image:
+      linear-gradient(var(--accent-dim) 1px, transparent 1px),
+      linear-gradient(90deg, var(--accent-dim) 1px, transparent 1px);
+    background-size: 60px 60px;
+    opacity: 0.3;
+    mask-image: radial-gradient(ellipse at 50% 0%, black 0%, transparent 50%);
+    -webkit-mask-image: radial-gradient(ellipse at 50% 0%, black 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  .container {
+    position: relative;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+    z-index: 1;
+  }
+
+  /* Site Header */
+  .site-header {
+    padding: 24px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .logo:hover {
+    color: var(--accent);
+  }
+
+  .header-nav {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 24px;
+  }
+
+  .nav-link {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .nav-link:hover,
+  .nav-link.active {
+    color: var(--accent);
+  }
+
+  .header-cta {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #fff;
+    background: var(--accent);
+    padding: 10px 20px;
+    text-decoration: none;
+    transition: background 0.2s;
+  }
+
+  .header-cta:hover {
+    background: var(--accent-hover);
+  }
+
+  /* Hero */
+  .tools-hero {
+    padding: 80px 0 60px;
+    text-align: center;
+  }
+
+  .hero-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    color: var(--accent);
+    margin-bottom: 24px;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .hero-label::before,
+  .hero-label::after {
+    content: '';
+    width: 24px;
+    height: 1px;
+    background: var(--accent);
+  }
+
+  .tools-hero h1 {
+    font-family: 'Outfit', sans-serif;
+    font-size: clamp(36px, 5vw, 52px);
+    font-weight: 700;
+    letter-spacing: -2px;
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+
+  .tools-hero h1 .accent {
+    color: var(--accent);
+  }
+
+  .tools-hero .subtitle {
+    font-size: 18px;
+    font-weight: 300;
+    color: var(--text-muted);
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  /* Quick Nav */
+  .quick-nav {
+    padding: 24px 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .quick-nav-inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .quick-nav-link {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    padding: 8px 14px;
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+
+  .quick-nav-link:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  /* Tools Grid */
+  .tools-section {
+    padding: 80px 0;
+  }
+
+  .tool-item {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px;
+    align-items: center;
+    padding: 64px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tool-item:first-child {
+    padding-top: 0;
+  }
+
+  .tool-item:last-child {
+    border-bottom: none;
+  }
+
+  .tool-item:nth-child(even) {
+    direction: rtl;
+  }
+
+  .tool-item:nth-child(even) > * {
+    direction: ltr;
+  }
+
+  .tool-content {
+    max-width: 480px;
+  }
+
+  .tool-number {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+
+  .tool-title {
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    letter-spacing: -0.5px;
+  }
+
+  .tool-desc {
+    font-size: 16px;
+    color: var(--text-muted);
+    font-weight: 300;
+    line-height: 1.6;
+    margin-bottom: 20px;
+  }
+
+  .tool-features {
+    list-style: none;
+  }
+
+  .tool-features li {
+    font-size: 14px;
+    color: var(--text-secondary);
+    padding: 6px 0;
+    padding-left: 20px;
+    position: relative;
+  }
+
+  .tool-features li::before {
+    content: '\2192';
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+    font-family: 'Space Mono', monospace;
+  }
+
+  .tool-screenshot {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    aspect-ratio: 16/10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+  }
+
+  /* Advanced Section */
+  .advanced-section {
+    background: var(--bg-alt);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 80px 0;
+  }
+
+  .advanced-header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+
+  .section-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 24px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+
+  .advanced-header p {
+    font-size: 16px;
+    color: var(--text-muted);
+    font-weight: 300;
+  }
+
+  /* CTA Section */
+  .cta-section {
+    padding: 100px 0;
+    text-align: center;
+  }
+
+  .cta-section h2 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    letter-spacing: -1px;
+  }
+
+  .cta-section .tagline {
+    font-size: 17px;
+    color: var(--text-muted);
+    font-weight: 300;
+    margin-bottom: 36px;
+  }
+
+  .cta {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    padding: 16px 32px;
+    text-decoration: none;
+    transition: background 0.2s ease, transform 0.2s ease;
+  }
+
+  .cta:hover {
+    background: var(--accent-hover);
+    transform: translateY(-2px);
+  }
+
+  /* Footer */
+  footer {
+    padding: 40px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .footer-inner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .footer-left {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+  }
+
+  .footer-right {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 300;
+  }
+
+  .footer-right a {
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .footer-right a:hover {
+    color: var(--accent);
+  }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .tool-item {
+      grid-template-columns: 1fr;
+      gap: 32px;
+    }
+
+    .tool-item:nth-child(even) {
+      direction: ltr;
+    }
+
+    .tool-content {
+      max-width: 100%;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .tools-hero { padding: 60px 0 40px; }
+    .tools-hero h1 { font-size: 32px; }
+
+    .header-nav {
+      display: none;
+    }
+
+    .footer-inner {
+      flex-direction: column;
+      gap: 16px;
+      text-align: center;
+    }
+
+    .quick-nav-inner {
+      gap: 6px;
+    }
+
+    .quick-nav-link {
+      font-size: 9px;
+      padding: 6px 10px;
+    }
+  }
+
+  @media (max-width: 540px) {
+    .container { padding: 0 18px; }
+    .tools-section { padding: 48px 0; }
+    .tool-item { padding: 40px 0; }
+    .tool-title { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+
+<!-- HEADER -->
+<header class="site-header">
+  <div class="container">
+    <div class="header-inner">
+      <a href="/" class="logo">Screaming Fixes</a>
+      <nav class="header-nav">
+        <div class="nav-links">
+          <a href="/tools" class="nav-link active">Tools</a>
+          <a href="/tutorials" class="nav-link">Tutorials</a>
+        </div>
+        <a href="/first-index" class="header-cta">Join First Index</a>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="tools-hero">
+  <div class="container">
+    <span class="hero-label">9 Modules</span>
+    <h1>Bulk SEO Fixes.<br><span class="accent">Beyond the Crawl.</span></h1>
+    <p class="subtitle">Fix what Screaming Frog finds, analyze backlinks with DataForSEO, build internal links, and more. All from WordPress.</p>
+  </div>
+</section>
+
+<!-- QUICK NAV -->
+<nav class="quick-nav">
+  <div class="container">
+    <div class="quick-nav-inner">
+      <a href="#broken-links" class="quick-nav-link">Broken Links</a>
+      <a href="#redirect-chains" class="quick-nav-link">Redirects</a>
+      <a href="#alt-text" class="quick-nav-link">Alt Text</a>
+      <a href="#page-titles" class="quick-nav-link">Titles</a>
+      <a href="#meta-descriptions" class="quick-nav-link">Meta Desc</a>
+      <a href="#orphan-pages" class="quick-nav-link">Orphan Pages</a>
+      <a href="#internal-links" class="quick-nav-link">Internal Links</a>
+      <a href="#backlink-reclaim" class="quick-nav-link">Backlink Reclaim</a>
+      <a href="#backlink-evaluator" class="quick-nav-link">Backlink Evaluator</a>
+    </div>
+  </div>
+</nav>
+
+<!-- TOOLS -->
+<section class="tools-section">
+  <div class="container">
+
+    <!-- Broken Links -->
+    <div class="tool-item" id="broken-links">
+      <div class="tool-content">
+        <div class="tool-number">01 / Broken Links</div>
+        <h2 class="tool-title">Fix Broken Internal Links</h2>
+        <p class="tool-desc">Upload your "All Inlinks" CSV from Screaming Frog. See every broken internal link, the pages they're on, and fix or remove them in bulk.</p>
+        <ul class="tool-features">
+          <li>AI-powered replacement URL suggestions</li>
+          <li>Bulk update or remove broken links</li>
+          <li>See exactly which pages contain each broken link</li>
+          <li>Export change log for reporting</li>
+        </ul>
+      </div>
+      <div class="tool-screenshot">Screenshot Coming Soon</div>
+    </div>
+
+    <!-- Redirect Chains -->
+    <div class="tool-item" id="redirect-chains">
+      <div class="tool-content">
+        <div class="tool-number">02 / Redirect Chains</div>
+        <h2 class="tool-title">Flatten Redirect Chains</h2>
+        <p class="tool-desc">Fix chains, loops, and temporary redirects from one CSV. Flatten multi-hop redirects to their final destination with one click.</p>
+        <ul class="tool-features">
+          <li>Visualize full redirect paths</li>
+          <li>One-click flatten to final destination</li>
+          <li>Integrates with Yoast, Rank Math, Redirection</li>
+          <li>Stop losing PageRank through unnecessary hops</li>
+        </ul>
+      </div>
+      <div class="tool-screenshot">Screenshot Coming Soon</div>
+    </div>
+
+    <!-- Alt Text -->
+    <div class="tool-item" id="alt-text">
+      <div class="tool-content">
+        <div class="tool-number">03 / Image Alt Text</div>
+        <h2 class="tool-title">Bulk Alt Text Updates</h2>
+        <p class="tool-desc">Find images missing alt text across your site. Generate SEO-friendly alt text using AI or write your own. Apply fixes in bulk.</p>
+        <ul class="tool-features">
+          <li>AI-generated alt text suggestions</li>
+          <li>Uses page context and focus keywords</li>
+          <li>Preview before applying changes</li>
+          <li>Works with Media Library images</li>
+        </ul>
+      </div>
+      <div class="tool-screenshot">Screenshot Coming Soon</div>
+    </div>
+
+    <!-- Page Titles -->
+    <div class="tool-item" id="page-titles">
+      <div class="tool-content">
+        <div class="tool-number">04 / Page Titles</div>
+        <h2 class="tool-title">Fix Missing & Duplicate Titles</h2>
+        <p class="tool-desc">Fix missing, duplicate, or over-length title tags. See character counts, get AI suggestions, and update titles without leaving the plugin.</p>
+        <ul class="tool-features">
+          <li>Character count with visual indicator</li>
+          <li>AI-powered title suggestions</li>
+          <li>Bulk update across pages</li>
+          <li>Integrates with Yoast, Rank Math, AIOSEO</li>
+        </ul>
+      </div>
+      <div class="tool-screenshot">Screenshot Coming Soon</div>
+    </div>
+
+    <!-- Meta Descriptions -->
+    <div class="tool-item" id="meta-descriptions">
+      <div class="tool-content">
+        <div class="tool-number">05 / Meta Descriptions</div>
+        <h2 class="tool-title">Generate Meta Descriptions</h2>
+        <p class="tool-desc">Find pages missing descriptions, generate optimized copy with AI, and apply changes in bulk. Same workflow as titles.</p>
+        <ul class="tool-features">
+          <li>AI-generated descriptions using page content</li>
+          <li>Character count optimization</li>
+          <li>Bulk apply across your site</li>
+          <li>Export changes for client reports</li>
+        </ul>
+      </div>
+      <div class="tool-screenshot">Screenshot Coming Soon</div>
+    </div>
+
+    <!-- Orphan Pages -->
+    <div class="tool-item" id="orphan-pages">
+      <div class="tool-content">
+        <div class="tool-number">06 / Orphan Pages</div>
+        <h2 class="tool-title">Find Stranded Content</h2>
+        <p class="tool-desc">Use Screaming Frog's Orphan Pages report to find stranded pages with no internal links pointing to them. Connect them back into your site structure.</p>
+        <ul class="tool-features">
+          <li>Upload orphan pages CSV directly</li>
+          <li>Pairs with Internal Link Builder</li>
+          <li>Find pages Google can't discover</li>
+          <li>Improve crawl efficiency</li>
+        </ul>
+      </div>
+      <div class="tool-screenshot">Screenshot Coming Soon</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ADVANCED MODULES -->
+<section class="advanced-section">
+  <div class="container">
+    <div class="advanced-header">
+      <div class="section-label">Advanced Modules</div>
+      <p>Go beyond crawl fixes with internal linking and backlink analysis tools.</p>
+    </div>
+
+    <!-- Internal Links -->
+    <div class="tool-item" id="internal-links">
+      <div class="tool-content">
+        <div class="tool-number">07 / Internal Link Builder</div>
+        <h2 class="tool-title">Build Topical Clusters</h2>
+        <p class="tool-desc">Upload your crawl data to find pages that need more internal links. Build contextual links to boost priority pages and improve site architecture.</p>
+        <ul class="tool-features">
+          <li>Find linking opportunities automatically</li>
+          <li>Suggest relevant anchor text</li>
+          <li>Build links directly from the plugin</li>
+          <li>Strengthen topical authority</li>
+        </ul>
+      </div>
+      <div class="tool-screenshot">Screenshot Coming Soon</div>
+    </div>
+
+    <!-- Backlink Reclaim -->
+    <div class="tool-item" id="backlink-reclaim">
+      <div class="tool-content">
+        <div class="tool-number">08 / Backlink Reclaim</div>
+        <h2 class="tool-title">Recover Lost Link Equity</h2>
+        <p class="tool-desc">External sites linking to your 404 pages? Don't let that link equity go to waste. Scan for broken backlinks and create redirects to reclaim the value.</p>
+        <ul class="tool-features">
+          <li>Powered by DataForSEO API</li>
+          <li>Find external links to 404 pages</li>
+          <li>Create redirects with one click</li>
+          <li>Free scans included, no API key required</li>
+        </ul>
+      </div>
+      <div class="tool-screenshot">Screenshot Coming Soon</div>
+    </div>
+
+    <!-- Backlink Evaluator -->
+    <div class="tool-item" id="backlink-evaluator">
+      <div class="tool-content">
+        <div class="tool-number">09 / Backlink Evaluator</div>
+        <h2 class="tool-title">Premium Backlink Analysis</h2>
+        <p class="tool-desc">Get premium-level backlink data from DataForSEO - free. View your complete backlink profile with domain authority, anchor text distribution, and lost link tracking.</p>
+        <ul class="tool-features">
+          <li>Domain authority and trust metrics</li>
+          <li>Anchor text distribution analysis</li>
+          <li>Dofollow/nofollow breakdown</li>
+          <li>Export detailed reports for clients</li>
+        </ul>
+      </div>
+      <div class="tool-screenshot">Screenshot Coming Soon</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="container">
+    <h2>Ready to start fixing?</h2>
+    <p class="tagline">100% free. No premium tier. Just the whole dang plugin.</p>
+    <a href="#" class="cta">Get the Plugin &rarr;</a>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-left">Screaming Fixes &copy; 2025</div>
+      <div class="footer-right">
+        <a href="/tools">Tools</a> &middot;
+        <a href="/tutorials">Tutorials</a> &middot;
+        <a href="/first-index">Join First Index</a> &middot;
+        <a href="/about">About</a> &middot;
+        <a href="/contact">Contact</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
