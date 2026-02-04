@@ -61,10 +61,14 @@
 
   .container {
     position: relative;
-    max-width: 680px;
+    max-width: 1100px;
     margin: 0 auto;
     padding: 60px 24px 80px;
     z-index: 1;
+  }
+
+  .container-narrow {
+    max-width: 720px;
   }
 
   /* Site Header */
@@ -78,7 +82,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    max-width: 680px;
+    max-width: 1100px;
     margin: 0 auto;
     padding: 0 24px;
   }
@@ -138,22 +142,25 @@
     background: #006644;
   }
 
-  /* Status badge */
+  /* Status badge - inline with hero label */
   .status-badge {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     font-family: 'Space Mono', monospace;
-    font-size: 11px;
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 2px;
+    letter-spacing: 1px;
     color: var(--accent);
-    margin-bottom: 40px;
+    background: var(--accent-dim);
+    border: 1px solid var(--accent-mid);
+    padding: 4px 10px;
+    margin-left: 16px;
   }
 
   .status-dot {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
     background: var(--accent);
     border-radius: 50%;
     animation: pulse 2s ease-in-out infinite;
@@ -505,21 +512,20 @@
 
 <div class="container">
 
-  <div class="status-badge fade-up">
-    <span class="status-dot"></span> Accepting Members
+  <div class="hero-label fade-up">
+    Private Group
+    <span class="status-badge"><span class="status-dot"></span> Accepting Members</span>
   </div>
 
-  <div class="hero-label fade-up delay-1">Private Group</div>
+  <h1 class="fade-up delay-1">First <span class="accent">Index</span></h1>
 
-  <h1 class="fade-up delay-2">First <span class="accent">Index</span></h1>
-
-  <p class="tagline fade-up delay-3">
+  <p class="tagline fade-up delay-2">
     The inner circle for SEOs building at the edge of automation, AI, and what comes after traditional search.
   </p>
 
-  <div class="divider fade-up delay-4"></div>
+  <div class="divider fade-up delay-3"></div>
 
-  <div class="fade-up delay-4">
+  <div class="fade-up delay-3">
     <div class="section-label">What you get inside</div>
     <div class="benefits">
       <div class="benefit">
@@ -553,7 +559,7 @@
     </div>
   </div>
 
-  <div class="cta-block fade-up delay-5">
+  <div class="cta-block fade-up delay-4">
     <div class="cta-heading">Get indexed first.</div>
     <div class="cta-sub">Join the SEOs who'd rather build the future than wait for a blog post about it.</div>
     <div class="email-form">
@@ -563,19 +569,19 @@
     <div class="form-note">No spam. No filler. Just signal. Unsubscribe anytime.</div>
   </div>
 
-  <div class="who-block fade-up delay-6">
+  <div class="who-block fade-up delay-5">
     <div class="avatar">BL</div>
     <div class="who-text">
       <strong>Brett Lindenberg</strong> — 15+ years in SEO and digital marketing. Building tools I wish existed. Screaming Fixes automates what used to take hours of manual technical SEO work, and First Index is where I share everything I'm learning along the way.
     </div>
   </div>
 
-  <div class="not-for fade-up delay-7">
+  <div class="not-for fade-up delay-6">
     <div class="not-for-label">This isn't for everyone</div>
     <p>If you're looking for beginner SEO tips or recycled marketing advice, this isn't it. First Index is for practitioners — agency operators, in-house leads, and independents who are already deep in the work and want to push further into automation and AI-driven search.</p>
   </div>
 
-  <footer class="site-footer fade-up delay-7">
+  <footer class="site-footer fade-up delay-6">
     <div class="footer-inner">
       <div class="footer-left">Screaming Fixes &copy; 2025</div>
       <div class="footer-right">
