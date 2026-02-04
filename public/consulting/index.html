@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI & SEO Consulting — Brett Lindenberg</title>
+<meta name="description" content="AI workflow consulting and technical SEO audits. Get a clear roadmap for implementing AI in your business or a comprehensive content strategy powered by modern tools.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-alt: #f7f7f7;
+    --border: #e8e8e8;
+    --border-light: #d0d0d0;
+    --text: #111111;
+    --text-secondary: #444444;
+    --text-muted: #666666;
+    --accent: #00875a;
+    --accent-hover: #006644;
+    --accent-dim: #00875a11;
+    --accent-mid: #00875a22;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    font-size: 18px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.01) 2px,
+      rgba(0,0,0,0.01) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  /* Grid background */
+  .bg-grid {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image:
+      linear-gradient(var(--accent-dim) 1px, transparent 1px),
+      linear-gradient(90deg, var(--accent-dim) 1px, transparent 1px);
+    background-size: 60px 60px;
+    opacity: 0.3;
+    mask-image: radial-gradient(ellipse at 50% 0%, black 0%, transparent 50%);
+    -webkit-mask-image: radial-gradient(ellipse at 50% 0%, black 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  .container {
+    position: relative;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+    z-index: 1;
+  }
+
+  /* Site Header */
+  .site-header {
+    padding: 24px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .logo:hover {
+    color: var(--accent);
+  }
+
+  .header-nav {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 24px;
+  }
+
+  .nav-link {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .nav-link:hover,
+  .nav-link.active {
+    color: var(--accent);
+  }
+
+  .header-cta {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #fff;
+    background: var(--accent);
+    padding: 10px 20px;
+    text-decoration: none;
+    transition: background 0.2s;
+  }
+
+  .header-cta:hover {
+    background: var(--accent-hover);
+  }
+
+  /* Hero */
+  .consulting-hero {
+    padding: 80px 0 60px;
+    max-width: 800px;
+  }
+
+  .hero-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    color: var(--accent);
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .hero-label::before {
+    content: '';
+    width: 30px;
+    height: 2px;
+    background: var(--accent);
+  }
+
+  h1 {
+    font-family: 'Outfit', sans-serif;
+    font-size: clamp(36px, 5vw, 48px);
+    font-weight: 700;
+    letter-spacing: -1px;
+    line-height: 1.1;
+    margin-bottom: 24px;
+  }
+
+  h1 .accent {
+    color: var(--accent);
+  }
+
+  .hero-desc {
+    font-size: 20px;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    font-weight: 300;
+  }
+
+  /* Packages Section */
+  .packages-section {
+    padding: 60px 0;
+  }
+
+  .section-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--text-muted);
+    margin-bottom: 32px;
+  }
+
+  .packages-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 32px;
+  }
+
+  .package-card {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    padding: 40px 32px;
+    position: relative;
+  }
+
+  .package-card::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 0;
+    width: 60px;
+    height: 3px;
+    background: var(--accent);
+  }
+
+  .package-card.featured {
+    border-color: var(--accent-mid);
+  }
+
+  .package-card.featured::before {
+    width: 100%;
+  }
+
+  .package-name {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+
+  .package-title {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    line-height: 1.3;
+  }
+
+  .package-price {
+    font-family: 'Space Mono', monospace;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 24px;
+  }
+
+  .package-price span {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-muted);
+  }
+
+  .package-desc {
+    font-size: 15px;
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+    line-height: 1.6;
+  }
+
+  .package-features {
+    list-style: none;
+    margin-bottom: 32px;
+  }
+
+  .package-features li {
+    font-size: 14px;
+    color: var(--text-secondary);
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .package-features li:last-child {
+    border-bottom: none;
+  }
+
+  .package-features li::before {
+    content: '→';
+    color: var(--accent);
+    font-family: 'Space Mono', monospace;
+    flex-shrink: 0;
+  }
+
+  .package-cta {
+    display: inline-block;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #fff;
+    background: var(--accent);
+    padding: 14px 24px;
+    text-decoration: none;
+    transition: background 0.2s;
+    width: 100%;
+    text-align: center;
+  }
+
+  .package-cta:hover {
+    background: var(--accent-hover);
+  }
+
+  /* Add-on Section */
+  .addon-section {
+    padding: 60px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .addon-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+  }
+
+  .addon-card {
+    padding: 32px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  .addon-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .addon-price {
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+
+  .addon-desc {
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+
+  /* Who Section */
+  .who-section {
+    padding: 60px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .who-content {
+    max-width: 720px;
+  }
+
+  .who-content h2 {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 24px;
+  }
+
+  .who-list {
+    list-style: none;
+  }
+
+  .who-list li {
+    font-size: 16px;
+    color: var(--text-secondary);
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .who-list li:last-child {
+    border-bottom: none;
+  }
+
+  .who-list li::before {
+    content: '✓';
+    color: var(--accent);
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  /* CTA Section */
+  .cta-section {
+    padding: 60px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .cta-box {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    padding: 48px;
+    max-width: 720px;
+  }
+
+  .cta-box h2 {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  .cta-box p {
+    color: var(--text-muted);
+    margin-bottom: 24px;
+    font-weight: 300;
+  }
+
+  .cta-box .email-link {
+    font-family: 'Space Mono', monospace;
+    font-size: 16px;
+    color: var(--accent);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: color 0.2s;
+  }
+
+  .cta-box .email-link:hover {
+    color: var(--accent-hover);
+  }
+
+  /* Footer */
+  footer {
+    padding: 40px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .footer-inner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .footer-left {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+  }
+
+  .footer-right {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 300;
+  }
+
+  .footer-right a {
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .footer-right a:hover {
+    color: var(--accent);
+  }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .packages-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .addon-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .consulting-hero { padding: 60px 0 40px; }
+    h1 { font-size: 32px; }
+
+    .header-nav {
+      display: none;
+    }
+
+    .footer-inner {
+      flex-direction: column;
+      gap: 16px;
+      text-align: center;
+    }
+
+    .cta-box {
+      padding: 32px 24px;
+    }
+  }
+
+  @media (max-width: 540px) {
+    .container { padding: 0 18px; }
+    .package-card { padding: 32px 24px; }
+  }
+
+  /* Animations */
+  .fade-up {
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeUp 0.6s ease forwards;
+  }
+
+  @keyframes fadeUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .delay-1 { animation-delay: 0.1s; }
+  .delay-2 { animation-delay: 0.2s; }
+  .delay-3 { animation-delay: 0.3s; }
+  .delay-4 { animation-delay: 0.4s; }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+
+<!-- HEADER -->
+<header class="site-header">
+  <div class="container">
+    <div class="header-inner">
+      <a href="/" class="logo">Screaming Fixes</a>
+      <nav class="header-nav">
+        <div class="nav-links">
+          <a href="/tools" class="nav-link">Tools</a>
+          <a href="/tutorials" class="nav-link">Tutorials</a>
+        </div>
+        <a href="/first-index" class="header-cta">Join First Index</a>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="consulting-hero">
+  <div class="container">
+    <div class="hero-label fade-up">Consulting</div>
+    <h1 class="fade-up delay-1">AI Strategy & <span class="accent">Implementation</span></h1>
+    <p class="hero-desc fade-up delay-2">
+      Most businesses know AI can help. Few know where to start. I help you identify the highest-impact opportunities and build a clear roadmap to get there.
+    </p>
+  </div>
+</section>
+
+<!-- PACKAGES -->
+<section class="packages-section">
+  <div class="container">
+    <div class="section-label fade-up delay-2">Packages</div>
+    <div class="packages-grid">
+
+      <div class="package-card fade-up delay-3">
+        <div class="package-name">Technical SEO + Content</div>
+        <h2 class="package-title">Full-Stack SEO Audit & AI Content Roadmap</h2>
+        <div class="package-price">$1,995 <span>one-time</span></div>
+        <p class="package-desc">
+          A comprehensive technical audit paired with a 12-month content strategy powered by AI workflows. Know exactly what to fix and what to publish.
+        </p>
+        <ul class="package-features">
+          <li>Complete technical site audit with prioritized fixes</li>
+          <li>12-month AI-powered content calendar (blog, video, social)</li>
+          <li>Marketing workflow integration roadmap</li>
+          <li>Tool recommendations and setup guidance</li>
+          <li>1-hour strategy call to walk through everything</li>
+          <li>Delivered as actionable documentation you own</li>
+        </ul>
+        <a href="mailto:brett.lindenberg@gmail.com?subject=SEO%20Audit%20%2B%20Content%20Roadmap" class="package-cta">Get Started →</a>
+      </div>
+
+      <div class="package-card featured fade-up delay-4">
+        <div class="package-name">AI Workflow Consulting</div>
+        <h2 class="package-title">AI Integration Assessment & Roadmap</h2>
+        <div class="package-price">$1,995 <span>one-time</span></div>
+        <p class="package-desc">
+          I'll audit your current workflows, identify where AI can save time or unlock new capabilities, and deliver a clear implementation plan.
+        </p>
+        <ul class="package-features">
+          <li>Deep-dive into your business processes and pain points</li>
+          <li>Identify 3-5 high-impact AI integration opportunities</li>
+          <li>Tool evaluation and vendor recommendations</li>
+          <li>Step-by-step implementation roadmap</li>
+          <li>ROI projections and prioritization framework</li>
+          <li>1-hour call to review findings and next steps</li>
+        </ul>
+        <a href="mailto:brett.lindenberg@gmail.com?subject=AI%20Workflow%20Consulting" class="package-cta">Get Started →</a>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ADD-ONS -->
+<section class="addon-section">
+  <div class="container">
+    <div class="section-label fade-up">Add-Ons</div>
+    <div class="addon-grid fade-up delay-1">
+
+      <div class="addon-card">
+        <h3 class="addon-title">Implementation Support</h3>
+        <div class="addon-price">$2,500/month</div>
+        <p class="addon-desc">
+          Hands-on help executing the roadmap. I'll work alongside your team to implement AI tools, build workflows, and troubleshoot issues as they arise. Minimum 3-month engagement.
+        </p>
+      </div>
+
+      <div class="addon-card">
+        <h3 class="addon-title">Discovery Call</h3>
+        <div class="addon-price">Free / 30 minutes</div>
+        <p class="addon-desc">
+          Not sure which package fits? Let's talk through your situation and I'll point you in the right direction — even if that's not working with me.
+        </p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- WHO THIS IS FOR -->
+<section class="who-section">
+  <div class="container">
+    <div class="who-content fade-up">
+      <h2>This is for you if...</h2>
+      <ul class="who-list">
+        <li>You're spending too much time on repetitive tasks that feel like they should be automated</li>
+        <li>You've heard about AI tools but don't know which ones actually matter for your business</li>
+        <li>Your content strategy is reactive instead of systematic</li>
+        <li>You want to move faster but your technical SEO backlog keeps growing</li>
+        <li>You need an outside perspective from someone who's already deep in this stuff</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="container">
+    <div class="cta-box fade-up">
+      <h2>Let's talk</h2>
+      <p>Have questions? Want to discuss a custom project? I respond to every email personally.</p>
+      <a href="mailto:brett.lindenberg@gmail.com" class="email-link">
+        brett.lindenberg@gmail.com →
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-left">Screaming Fixes &copy; 2026</div>
+      <div class="footer-right">
+        <a href="/tools">Tools</a> &middot;
+        <a href="/tutorials">Tutorials</a> &middot;
+        <a href="/first-index">First Index</a> &middot;
+        <a href="/consulting">Consulting</a> &middot;
+        <a href="/about">About</a> &middot;
+        <a href="/contact">Contact</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
