@@ -419,6 +419,45 @@
     color: var(--accent);
   }
 
+  /* Mobile Menu */
+  .mobile-menu-toggle {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 32px;
+    height: 32px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    z-index: 1001;
+  }
+
+  .mobile-menu-toggle span {
+    display: block;
+    width: 24px;
+    height: 2px;
+    background: var(--text-muted);
+    transition: all 0.3s ease;
+  }
+
+  .mobile-menu-toggle:hover span {
+    background: var(--accent);
+  }
+
+  .menu-open .mobile-menu-toggle span:nth-child(1) {
+    transform: rotate(45deg) translate(5px, 5px);
+  }
+
+  .menu-open .mobile-menu-toggle span:nth-child(2) {
+    opacity: 0;
+  }
+
+  .menu-open .mobile-menu-toggle span:nth-child(3) {
+    transform: rotate(-45deg) translate(5px, -5px);
+  }
+
   /* Responsive */
   @media (max-width: 900px) {
     .tool-item {
@@ -439,8 +478,47 @@
     .tools-hero { padding: 60px 0 40px; }
     .tools-hero h1 { font-size: 32px; }
 
+    .mobile-menu-toggle {
+      display: flex;
+    }
+
     .header-nav {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 24px;
+      flex-direction: column;
+      gap: 16px;
       display: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .menu-open .header-nav {
+      display: flex;
+    }
+
+    .header-nav .nav-links {
+      flex-direction: column;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .header-nav .nav-link {
+      font-size: 13px;
+      padding: 8px 0;
+    }
+
+    .header-nav .header-cta {
+      width: 100%;
+      text-align: center;
+      padding: 14px 20px;
+    }
+
+    .site-header {
+      position: relative;
     }
 
     .footer-inner {
@@ -476,6 +554,11 @@
   <div class="container">
     <div class="header-inner">
       <a href="/" class="logo">Screaming Fixes</a>
+      <button class="mobile-menu-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
       <nav class="header-nav">
         <div class="nav-links">
           <a href="/tools" class="nav-link active">Tools</a>
@@ -717,6 +800,25 @@
     </div>
   </div>
 </footer>
+
+<!-- Mobile Menu Toggle -->
+<script>
+  const menuToggle = document.querySelector('.mobile-menu-toggle');
+  const header = document.querySelector('.site-header');
+
+  menuToggle.addEventListener('click', () => {
+    header.classList.toggle('menu-open');
+    const isOpen = header.classList.contains('menu-open');
+    menuToggle.setAttribute('aria-expanded', isOpen);
+  });
+
+  document.querySelectorAll('.header-nav a').forEach(link => {
+    link.addEventListener('click', () => {
+      header.classList.remove('menu-open');
+      menuToggle.setAttribute('aria-expanded', 'false');
+    });
+  });
+</script>
 
 </body>
 </html>
