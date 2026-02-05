@@ -658,6 +658,7 @@
     <div class="cta-sub">Join the SEOs who'd rather build the future than wait for a blog post about it.</div>
     <div class="email-form">
       <input type="email" placeholder="you@domain.com">
+      <input type="text" name="website" style="display:none" tabindex="-1" autocomplete="off">
       <button type="submit">Join</button>
     </div>
     <div class="form-note">No spam. No filler. Just signal. Unsubscribe anytime.</div>
@@ -708,6 +709,93 @@
       menuToggle.setAttribute('aria-expanded', 'false');
     });
   });
+</script>
+
+<!-- Email Signup Handler -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.querySelector('.email-form');
+  if (!form) return;
+
+  const input = form.querySelector('input[type="email"]');
+  const honeypot = form.querySelector('input[name="website"]');
+  const button = form.querySelector('button');
+  const note = form.closest('.cta-block')?.querySelector('.form-note');
+
+  // Store originals
+  const originalButtonText = button.textContent;
+  const originalNote = note?.textContent;
+
+  button.addEventListener('click', async (e) => {
+    e.preventDefault();
+
+    const email = input.value.trim();
+    const website = honeypot?.value || '';
+
+    // Basic validation
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showMessage('Enter a valid email address.', 'error');
+      input.focus();
+      return;
+    }
+
+    // Disable while submitting
+    button.disabled = true;
+    button.textContent = 'Joining...';
+    button.style.opacity = '0.7';
+
+    try {
+      const res = await fetch('/.netlify/functions/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, website }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        // Success state
+        input.value = '';
+        input.style.display = 'none';
+        button.textContent = '✓ You\'re in';
+        button.style.background = '#00aa66';
+        button.style.opacity = '1';
+        button.style.flex = '1';
+        showMessage('Welcome aboard. Watch your inbox.', 'success');
+      } else {
+        throw new Error(data.error || 'Subscription failed');
+      }
+    } catch (err) {
+      console.error('Signup error:', err);
+      showMessage('Something went wrong. Try again.', 'error');
+      button.disabled = false;
+      button.textContent = originalButtonText;
+      button.style.opacity = '1';
+    }
+  });
+
+  // Also handle Enter key in the input
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      button.click();
+    }
+  });
+
+  function showMessage(text, type) {
+    if (!note) return;
+    note.textContent = text;
+    note.style.color = type === 'success' ? '#00aa66' : '#ff4444';
+
+    // Reset after 5 seconds on error
+    if (type === 'error') {
+      setTimeout(() => {
+        note.textContent = originalNote;
+        note.style.color = '';
+      }, 5000);
+    }
+  }
+});
 </script>
 
 </body>
