@@ -11,9 +11,16 @@ exports.handler = async (event) => {
     };
   }
 
-  // CORS headers (adjust origin for production)
+  // CORS headers
+  const allowedOrigins = [
+    "https://screamingfixes.com",
+    "https://www.screamingfixes.com"
+  ];
+  const origin = event.headers.origin || event.headers.Origin || "";
+  const corsOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+
   const headers = {
-    "Access-Control-Allow-Origin": "https://screamingfixes.com",
+    "Access-Control-Allow-Origin": corsOrigin,
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Content-Type": "application/json",
@@ -25,7 +32,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { email } = JSON.parse(event.body);
+    const { email, website } = JSON.parse(event.body);
 
     // Validate email
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -37,7 +44,6 @@ exports.handler = async (event) => {
     }
 
     // Simple honeypot check — if a "website" field is filled, it's a bot
-    const { website } = JSON.parse(event.body);
     if (website) {
       // Pretend success to the bot
       return {
