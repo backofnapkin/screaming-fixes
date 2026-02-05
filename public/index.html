@@ -487,35 +487,29 @@
       margin: 0 auto;
     }
 
-    /* ---- SCREENSHOT ---- */
-    #screenshot {
+    /* ---- VIDEO ---- */
+    #video {
       padding: 0 0 80px;
       text-align: center;
     }
 
-    .screenshot-placeholder {
+    .video-wrapper {
       max-width: 900px;
-      margin: 0 auto 24px;
-      background: var(--bg-alt);
+      margin: 0 auto;
+      position: relative;
+      padding-bottom: 56.25%;
+      height: 0;
+      overflow: hidden;
       border: 1px solid var(--border);
-      height: 400px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: 'Space Mono', monospace;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 2px;
-      color: var(--text-muted);
     }
 
-    #screenshot p {
-      font-size: 15px;
-      color: var(--text-muted);
-      font-style: italic;
-      font-weight: 300;
-      max-width: 560px;
-      margin: 0 auto;
+    .video-wrapper iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
     }
 
     /* ---- INTEGRATIONS ---- */
@@ -747,7 +741,7 @@
       .hero-subtitle { font-size: 18px; }
       .hero-desc { font-size: 16px; }
 
-      section, #how, #features, #changelog, #screenshot, #integrations, #testimonials {
+      section, #how, #features, #changelog, #video, #integrations, #testimonials {
         padding: 48px 0;
       }
 
@@ -905,6 +899,24 @@
   </div>
 </section>
 
+<!-- VIDEO DEMO -->
+<section id="video" class="fade-in">
+  <div class="container">
+    <div class="video-wrapper">
+      <iframe src="https://www.youtube-nocookie.com/embed/1C0nr_1tbHM" title="Screaming Fixes Demo — Export from Screaming Frog, upload CSV, and fix SEO issues in bulk" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+    </div>
+  </div>
+</section>
+
+<!-- DOCUMENT EVERYTHING -->
+<section id="changelog" class="fade-in">
+  <div class="container">
+    <div class="section-label" style="justify-content: center;">Change Tracking</div>
+    <h2>Download a complete change log after every fix.</h2>
+    <p>Track what changed. Share results with clients. Prove ROI to your boss. Cover your buns.</p>
+  </div>
+</section>
+
 <!-- FEATURES -->
 <section id="features" class="fade-in">
   <div class="container">
@@ -965,23 +977,6 @@
         </div>
       </div>
     </div>
-  </div>
-</section>
-
-<!-- DOCUMENT EVERYTHING -->
-<section id="changelog" class="fade-in">
-  <div class="container">
-    <div class="section-label" style="justify-content: center;">Change Tracking</div>
-    <h2>Download a complete change log after every fix.</h2>
-    <p>Track what changed. Share results with clients. Prove ROI to your boss. Cover your buns.</p>
-  </div>
-</section>
-
-<!-- SCREENSHOT -->
-<section id="screenshot" class="fade-in">
-  <div class="container">
-    <div class="screenshot-placeholder">Plugin UI Screenshot</div>
-    <p>Upload your Screaming Frog CSV, review the fixes, and apply them all at once.</p>
   </div>
 </section>
 
